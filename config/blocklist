@@ -7,7 +7,6 @@ duckstation-lr # Libretro support removed from upstream.
 duckstation-sa # Patches need to be reworked.
 flycast-sa # Patched need to rebased
 gptokeyb # Newer versions break hotkeys
-gzdoom-sa # Stick to release versions.
 idtech-lr # Just a dummy package
 kronos-sa # Using the release version of kronos had better results.
 melonds-sa # Broken OpenGL renderer upstream

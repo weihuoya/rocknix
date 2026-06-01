@@ -35,17 +35,9 @@ case "${1}" in
     rm -rf /storage/.config/flycast
     cp -rf /usr/config/flycast /storage/.config/
 
-    rm -rf /storage/.config/gzdoom
-    cp -rf /usr/config/gzdoom /storage/.config/
-
-    rm -rf /storage/.config/hatari
-    cp -rf /usr/config/hatari /storage/.config/
-
     rm -rf /storage/.config/melonDS
     cp -rf /usr/config/melonDS /storage/.config/
 
-    rm -rf /storage/.config/openbor
-    cp -rf /usr/config/openbor /storage/.config/
 
     rm -rf /storage/.config/ppsspp
     cp -rf /usr/config/ppsspp /storage/.config/

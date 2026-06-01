@@ -33,6 +33,56 @@ systems = {
 
     "gbc":        { "name": "Nintendo Gameboy Color", "biosFiles": [ { "md5": "dbfce9db9deaa2567f6a84fde55f9680", "file": "bios/gbc_bios.bin" } ] },
 
+    # https://docs.libretro.com/library/beetle_handy/#bios
+    "lynx": { "name": "Lynx", "biosFiles": [ { "md5": "fcd403db69f54290b51035d82f835e7b", "file": "bios/lynxboot.img"} ] },
+
+    # ---------- Magnavox and Philips ---------- #
+    # https://docs.libretro.com/library/o2em/#bios
+    "o2em": { "name": "Odyssey 2", "biosFiles": [ { "md5": "562d5ebf9e030a40d6fabfc2f33139fd", "file": "bios/o2rom.bin" },
+                                                  { "md5": "f1071cdb0b6b10dde94d3bc8a6146387", "file": "bios/c52.bin"   } ] },
+
+    "videopacplus": { "name": "Videopac+ G7400", "biosFiles": [ { "md5": "c500ff71236068e0dc0d0603d265ae76", "file": "bios/g7400.bin" },
+                                                                { "md5": "279008e4a0db2dc5f1c048853b033828", "file": "bios/jopac.bin" } ] },
+
+    # ---------- Mattel ---------- #
+    # https://docs.libretro.com/library/freeintv/#bios
+    "intellivision": { "name": "Mattel Intellivision", "biosFiles": [   { "md5": "62e761035cb657903761800f4437b8af", "file": "bios/exec.bin"   },
+                                                                        { "md5": "0cd5946c6473e42e8e4c2137785e427f", "file": "bios/grom.bin"   } ] },
+
+    # ---------- NEC ---------- #
+    # https://docs.libretro.com/library/beetle_pce_fast/#bios
+    "pcengine":   { "name": "PC Engine", "biosFiles":  [ { "md5": "38179df8f4ac870017db21ebcbf53114", "file": "bios/syscard3.pce" } ] },
+
+    # https://docs.libretro.com/library/beetle_pc_fx/#bios
+    "pcfx":       { "name": "PC-FX", "biosFiles":      [ { "md5": "08e36edbea28a017f79f8d4f7ff9b6d7", "file": "bios/pcfx.rom"     } ] },
+
+    # https://docs.libretro.com/library/beetle_pce_fast/#bios
+    "supergrafx": { "name": "Supergrafx", "biosFiles": [ { "md5": "38179df8f4ac870017db21ebcbf53114", "file": "bios/syscard3.pce" } ] },
+
+    # ---------- SNK ----------#
+    "neogeo":   { "name": "NeoGeo", "biosFiles":    [  { "md5": "dffb72f116d36d025068b23970a4f6df", "file": "bios/neogeo.zip" } ] },
+    "neogeocd":  { "name": "NeoGeo CD", "biosFiles": [ { "md5": "8834880c33164ccbe6476b559f3e37de", "file": "bios/neocd/neocd_f.rom" },
+                                                       { "md5": "043d76d5f0ef836500700c34faef774d", "file": "bios/neocd/neocd_sf.rom" },
+                                                       { "md5": "de3cf45d227ad44645b22aa83b49f450", "file": "bios/neocd/neocd_t.rom" },
+                                                       { "md5": "f6325a33c6d63ea4b9162a3fa8c32727", "file": "bios/neocd/neocd_st.rom" },
+                                                       { "md5": "11526d58d4c524daef7d5d677dc6b004", "file": "bios/neocd/neocd_z.rom" },
+                                                       { "md5": "971ee8a36fb72da57aed01758f0a37f5", "file": "bios/neocd/neocd_sz.rom" },
+                                                       { "md5": "5c2366f25ff92d71788468ca492ebeca", "file": "bios/neocd/front-sp1.bin" },
+                                                       { "md5": "122aee210324c72e8a11116e6ef9c0d0", "file": "bios/neocd/top-sp1.bin" },
+                                                       { "md5": "f39572af7584cb5b3f70ae8cc848aba2", "file": "bios/neocd/neocd.bin"},
+                                                       { "md5": "08ca8b2dba6662e8024f9e789711c6fc", "file": "bios/neocd/uni-bioscd.rom"} ] },
+
+    # ---------- Sharp ---------- #
+    # https://github.com/libretro/libretro-super/blob/master/dist/info/px68k_libretro.info
+    "x68000": { "name": "Sharp x68000", "biosFiles": [  { "md5": "7fd4caabac1d9169e289f0f7bbf71d8e", "file": "bios/keropi/iplrom.dat" },
+                                                        { "md5": "cb0a5cfcf7247a7eab74bb2716260269", "file": "bios/keropi/cgrom.dat"  } ] },
+
+    # ---------- Panasonic, Sanyo and Goldstar ---------- #
+    # https://github.com/libretro/libretro-super/blob/master/dist/info/opera_libretro.info
+    "3do":  { "name": "3DO", "biosFiles": [ { "md5": "f47264dd47fe30f73ab3c010015c155b", "file": "bios/panafz1.bin" },
+                                            { "md5": "51f2f43ae2f3508a14d9f56597e2d3ce", "file": "bios/panafz10.bin"},
+                                            { "md5": "8639fd5e549bd6238cfee79e3e749114", "file": "bios/goldstar.bin"} ] },
+
     # ---------- Sega ---------- #
     "dreamcast":    { "name": "Sega Dreamcast", "biosFiles": [ { "md5": "e10c53c2f8b90bab96ead2d368858623", "file": "bios/dc/dc_boot.bin" },
                                                                { "md5": "0a93f7940c455905bea6e392dfde92a4", "file": "bios/dc/dc_flash.bin" },
