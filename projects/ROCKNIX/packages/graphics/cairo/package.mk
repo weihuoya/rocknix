@@ -3,29 +3,20 @@
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="cairo"
-PKG_VERSION="1.17.8"
-PKG_SHA256="5b10c8892d1b58d70d3f0ba5b47863a061262fa56b9dc7944161f8c8b783bc64"
+PKG_VERSION="1.18.4"
+PKG_SHA256="445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb"
 PKG_LICENSE="LGPL"
 PKG_SITE="https://cairographics.org/"
-PKG_URL="https://cairographics.org/snapshots/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://cairographics.org/releases/${PKG_NAME}-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain zlib freetype fontconfig glib libpng pixman"
 PKG_LONGDESC="Cairo is a vector graphics library with cross-device output support."
 
 configure_package() {
-  if [ "${OPENGL}" != "no" ]; then
-    PKG_DEPENDS_TARGET+=" ${OPENGL}"
-  fi
-
-  if [ "${OPENGLES}" != "no" ]; then
-    PKG_DEPENDS_TARGET+=" ${OPENGLES}"
-  fi
-
   case ${DISPLAYSERVER} in
     "x11"|"wl")
       PKG_DEPENDS_TARGET+=" libxcb libXrender libX11 mesa"
     ;;
   esac
-
 }
 
 pre_configure_target() {
@@ -36,8 +27,8 @@ pre_configure_target() {
                          -Dquartz=disabled \
                          -Dtee=disabled \
                          -Dtests=disabled \
-                         -Dxml=disabled \
                          -Dzlib=enabled \
+                         -Dlzo=disabled \
                          -Dgtk2-utils=disabled \
                          -Dglib=enabled \
                          -Dspectre=disabled \

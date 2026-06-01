@@ -1,0 +1,17 @@
+--- wscript_configure_embedded_heimdal	2026-06-01 15:24:04.004182709 +0800
++++ wscript_configure_embedded_heimdal.patched	2026-06-01 15:24:44.935528695 +0800
+@@ -16,3 +16,14 @@
+ 
+ conf.define('HAVE_KRB5_INIT_CREDS_STEP', 1)
+ conf.define('HAVE_GSS_KEY_VALUE_SET_DESC', 1)
++
++def check_system_heimdal_binary(name):
++    if conf.LIB_MAY_BE_BUNDLED(name):
++        return False
++    if not conf.find_program(name, var=name.upper()):
++        return False
++    conf.define('USING_SYSTEM_%s' % name.upper(), 1)
++    return True
++
++check_system_heimdal_binary("compile_et")
++check_system_heimdal_binary("asn1_compile")

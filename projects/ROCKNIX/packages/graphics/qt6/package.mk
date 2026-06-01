@@ -2,11 +2,12 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="qt6"
-PKG_VERSION_MAJOR="6.8"
-PKG_VERSION="${PKG_VERSION_MAJOR}.3"
+PKG_VERSION_MAJOR="6.11"
+PKG_VERSION="${PKG_VERSION_MAJOR}.0"
 PKG_LICENSE="GPL"
 PKG_SITE="https://download.qt.io"
 PKG_URL="${PKG_SITE}/archive/qt/${PKG_VERSION_MAJOR}/${PKG_VERSION}/single/qt-everywhere-src-${PKG_VERSION}.tar.xz"
+PKG_SHA256="acf3b3db04c9e5d0820e8324b097320388954c297cee83d2bd698789234f68a4"
 PKG_DEPENDS_TARGET="toolchain qt6:host openssl libjpeg-turbo libpng pcre2 sqlite zlib freetype SDL2 gstreamer gst-plugins-base gst-plugins-good gst-libav"
 PKG_DEPENDS_HOST="gcc:host llvm:host mesa:host"
 PKG_LONGDESC="A cross-platform application and UI framework"
