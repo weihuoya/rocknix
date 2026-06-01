@@ -21,32 +21,6 @@ if [ -f "/storage/.config/drastic/config/drastic.cfg.r33s" ]; then
 fi
 
 
-#Set gzoom config for R33S
-if [ ! -d "/storage/.config/gzdoom" ]; then
-     cp -r "/usr/config/gzdoom" "/storage/.config/"
-fi
-
-#Set gzdoom settings
-if  grep R33S -q "/storage/.config/gzdoom/gzdoom.ini"
-then
-  exit 1
-else
-sed -i '/^[Doom.Bindings]/c\[Doom.Bindings] #R33S' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^vid_defheight=/c\vid_defheight=480' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^vid_defwidth=/c\vid_defwidth=640' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy1=/c\Joy1=+use' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy5=/c\Joy5=+speed' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy6=/c\Joy6=+attack' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy7=/c\Joy7=+moveleft' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy8=/c\Joy8=+moveright' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy9=/c\Joy9=menu_main' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy11=/c\Joy11=+forward' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy12=/c\Joy12=+back' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy13=/c\Joy13=+left' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy14=/c\Joy14=+right' /storage/.config/gzdoom/gzdoom.ini
-sed -i '/^Joy2=/c\Joy2=+attack' /storage/.config/gzdoom/gzdoom.ini
-fi
-
 #Set ppsspp config for R33S
 if [ ! -d "/storage/.config/ppsspp" ]; then
     mkdir -p "/storage/.config/ppsspp"
