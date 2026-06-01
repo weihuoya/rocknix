@@ -9,7 +9,7 @@ PKG_LICENSE="MPL-2.0"
 PKG_SITE="https://github.com/cemu-project/Cemu"
 PKG_URL="${PKG_SITE}.git"
 PKG_LONGDESC="KDE Extra CMake Modules"
-PKG_DEPENDS_TARGET="toolchain libzip glslang glm curl rapidjson openssl boost libfmt pugixml libpng gtk3 wxwidgets SDL2 libsodium hidapi spirv-tools"
+PKG_DEPENDS_TARGET="toolchain libzip glslang glm curl rapidjson openssl boost libfmt pugixml libpng gtk3 wxwidgets SDL2 libsodium hidapi spirv-tools bluez"
 PKG_TOOLCHAIN="cmake"
 
 configure_package() {
