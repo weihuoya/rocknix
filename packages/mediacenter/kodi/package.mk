@@ -368,11 +368,6 @@ post_makeinstall_target() {
     echo "WAYLAND_DISPLAY=wayland-1" >>${INSTALL}/usr/lib/kodi/kodi.conf
   fi
 
-  # nvidia: Enable USLEEP to reduce CPU load while rendering
-  if listcontains "${GRAPHIC_DRIVERS}" "nvidia"; then
-    echo "__GL_YIELD=USLEEP" >> ${INSTALL}/usr/lib/kodi/kodi.conf
-  fi
-
   mkdir -p ${INSTALL}/usr/sbin
   cp ${PKG_DIR}/scripts/service-addon-wrapper ${INSTALL}/usr/sbin
 

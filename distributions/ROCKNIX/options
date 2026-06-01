@@ -93,7 +93,7 @@
   OPENVPN_SUPPORT="no"
 
 # build and install ZeroTier support (yes / no)
-  ZEROTIER_SUPPORT="yes"
+  ZEROTIER_SUPPORT="no"
 
 # build and install WireGuard support (yes / no)
   WIREGUARD_SUPPORT="yes"
