@@ -188,3 +188,12 @@ jobs:
           gh release create "qt6-aarch64-${{ inputs.DEVICE }}" --title "Qt6 cache for ${{ inputs.DEVICE }}" --notes "Auto-generated qt6 cache" --prerelease --repo weihuoya/rocknix || true
           gh release upload "qt6-aarch64-${{ inputs.DEVICE }}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.aa, continuing..."
           gh release upload "qt6-aarch64-${{ inputs.DEVICE }}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ab, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

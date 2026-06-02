@@ -243,3 +243,12 @@ jobs:
           mv build.emu-libretro.tar.zst "${ASSET}"
           gh release create "emu-libretro-aarch64-${{ inputs.DEVICE }}" --title "Emu-libretro cache for ${{ inputs.DEVICE }}" --notes "Auto-generated emu-libretro cache" --prerelease --repo weihuoya/rocknix || true
           gh release upload "emu-libretro-aarch64-${{ inputs.DEVICE }}" "${ASSET}" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

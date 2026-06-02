@@ -29,20 +29,24 @@ unset LD_LIBRARY_PATH
 
 rm -f "${STAMP_URL}" "${STAMP_SHA}"
 
+# Mirror first, then original source
 PKG_URLS="${PKG_URL}"
-if [ -n "${PACKAGE_MIRROR}" ]
-then
-  PKG_URLS="${PKG_URL} ${PACKAGE_MIRROR}"
+if [ -n "${PACKAGE_MIRROR}" ]; then
+  PKG_URLS="${PACKAGE_MIRROR} ${PKG_URL}"
 fi
 
 NBWGET=10
+DOWNLOADED_FROM_MIRROR="no"
 while [ ${NBWGET} -gt 0 ]; do
   for url in ${PKG_URLS}; do
     rm -f "${PACKAGE}"
     if ${WGET_CMD} "${url}"; then
       CALC_SHA256=$(sha256sum "${PACKAGE}" | cut -d" " -f1)
 
-      [ -z "${PKG_SHA256}" -o "${PKG_SHA256}" = "${CALC_SHA256}" ] && break 2
+      [ -z "${PKG_SHA256}" -o "${PKG_SHA256}" = "${CALC_SHA256}" ] && {
+        [ "${url}" = "${PACKAGE_MIRROR}" ] && DOWNLOADED_FROM_MIRROR="yes"
+        break 2
+      }
 
       build_msg "CLR_WARNING" "WARNING" "Incorrect checksum calculated on downloaded file: got ${CALC_SHA256} wanted ${PKG_SHA256}"
     fi
@@ -56,4 +60,13 @@ else
   build_msg "CLR_INFO" "INFO" "Calculated checksum: ${CALC_SHA256}"
   echo "${PKG_URL}" > "${STAMP_URL}"
   echo "${CALC_SHA256}" > "${STAMP_SHA}"
+fi
+
+# If downloaded from original source (not mirror), queue for upload to mirror
+if [ "${DOWNLOADED_FROM_MIRROR}" = "no" -a -n "${PACKAGE_MIRROR}" -a -n "${DISTRO_MIRROR}" ]; then
+  UPLOAD_LIST="${SOURCES}/.upload_sources"
+  if [ ! -f "${UPLOAD_LIST}" ] || ! grep -qxF "${PKG_NAME} ${PKG_SOURCE_NAME}" "${UPLOAD_LIST}" 2>/dev/null; then
+    echo "${PKG_NAME} ${PKG_SOURCE_NAME}" >> "${UPLOAD_LIST}"
+    build_msg "CLR_INFO" "INFO" "Added ${PKG_SOURCE_NAME} to mirror upload queue"
+  fi
 fi

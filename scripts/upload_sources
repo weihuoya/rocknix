@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
+
+set -e
+
+. config/options ""
+
+# Determine upload queue file
+UPLOAD_LIST="${SOURCES}/.upload_sources"
+
+if [ ! -f "${UPLOAD_LIST}" ]; then
+  echo "No sources queued for upload."
+  exit 0
+fi
+
+# Support both GITHUB_API_TOKEN (script default) and GH_TOKEN (GitHub Actions / gh CLI)
+TOKEN="${GITHUB_API_TOKEN:-${GH_TOKEN}}"
+if [ -z "${TOKEN}" ]; then
+  echo "WARNING: GITHUB_API_TOKEN (or GH_TOKEN) is not set, cannot upload sources to mirror."
+  exit 0
+fi
+
+# Hard-coded mirror target: always upload to weihuoya/rocknix release "sources"
+# This ensures sources are centralized regardless of which fork/repo runs the build.
+GH_OWNER="weihuoya"
+GH_REPO="rocknix"
+GH_TAG="sources"
+
+echo "Mirror: ${GH_OWNER}/${GH_REPO} tag=${GH_TAG}"
+
+# Get release info
+RELEASE_JSON=$(curl -s -L -H "Authorization: token ${TOKEN}" \
+  "https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/releases/tags/${GH_TAG}")
+RELEASE_ID=$(echo "${RELEASE_JSON}" | jq -r '.id // empty')
+
+if [ -z "${RELEASE_ID}" -o "${RELEASE_ID}" = "null" ]; then
+  echo "ERROR: Could not find release '${GH_TAG}' in ${GH_OWNER}/${GH_REPO}"
+  echo "       The build-nightly workflow should have created it before starting builds."
+  echo "${RELEASE_JSON}" | jq -r '.message // empty'
+  exit 1
+fi
+
+echo "Release ID: ${RELEASE_ID}"
+
+# Upload each queued source
+FAILED=0
+while read -r pkg_name pkg_source; do
+  [ -z "${pkg_name}" ] && continue
+
+  SOURCE_FILE="${SOURCES}/${pkg_name}/${pkg_source}"
+  if [ ! -f "${SOURCE_FILE}" ]; then
+    echo "WARNING: Source file not found: ${SOURCE_FILE}"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
+
+  # Check if asset already exists
+  ASSET_ID=$(echo "${RELEASE_JSON}" | jq -r ".assets[] | select(.name == \"${pkg_source}\") | .id // empty")
+  if [ -n "${ASSET_ID}" ]; then
+    echo "SKIP: ${pkg_source} already exists on mirror"
+    continue
+  fi
+
+  echo "UPLOAD: ${pkg_source} ..."
+  UPLOAD_RESULT=$(curl -s -L -H "Authorization: token ${TOKEN}" \
+    -H "Content-Type: application/octet-stream" \
+    --data-binary @"${SOURCE_FILE}" \
+    "https://uploads.github.com/repos/${GH_OWNER}/${GH_REPO}/releases/${RELEASE_ID}/assets?name=${pkg_source}")
+
+  UPLOAD_ERROR_CODE=$(echo "${UPLOAD_RESULT}" | jq -r '.errors[0].code // empty')
+  UPLOAD_ERROR_MSG=$(echo "${UPLOAD_RESULT}" | jq -r '.errors // empty')
+  if [ "${UPLOAD_ERROR_CODE}" = "already_exists" ]; then
+    echo "SKIP: ${pkg_source} was just uploaded by another job"
+  elif [ -n "${UPLOAD_ERROR_CODE}" ]; then
+    echo "ERROR uploading ${pkg_source}: ${UPLOAD_ERROR_MSG}"
+    FAILED=$((FAILED + 1))
+  else
+    echo "OK: ${pkg_source}"
+    # Refresh release info so subsequent checks see the newly uploaded asset
+    RELEASE_JSON=$(curl -s -L -H "Authorization: token ${TOKEN}" \
+      "https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/releases/tags/${GH_TAG}")
+  fi
+done < "${UPLOAD_LIST}"
+
+if [ ${FAILED} -eq 0 ]; then
+  rm -f "${UPLOAD_LIST}"
+  echo "All sources uploaded successfully."
+else
+  echo "${FAILED} upload(s) failed. Run again after fixing the issues."
+  exit 1
+fi

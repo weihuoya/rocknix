@@ -173,3 +173,12 @@ jobs:
           mv build.mame-lr.tar.zst "${ASSET}"
           gh release create "mame-lr-aarch64-${{ inputs.DEVICE }}" --title "MAME-lr cache for ${{ inputs.DEVICE }}" --notes "Auto-generated mame-lr cache" --prerelease --repo weihuoya/rocknix || true
           gh release upload "mame-lr-aarch64-${{ inputs.DEVICE }}" "${ASSET}" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

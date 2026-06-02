@@ -37,6 +37,13 @@ jobs:
           MATRIX='[{"device":"SM8550","project":"ROCKNIX"}]'
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
+      - name: Ensure sources release exists
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          gh release view sources --repo weihuoya/rocknix >/dev/null 2>&1 || \
+          gh release create sources --title "Source Mirror" --notes "Auto-uploaded source archives" --prerelease --repo weihuoya/rocknix || true
+
   build-docker:
     name: Docker
     needs: set-envs

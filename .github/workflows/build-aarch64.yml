@@ -199,4 +199,13 @@ jobs:
           path: aarch64-key.txt
           if-no-files-found: error
 
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
+
 
