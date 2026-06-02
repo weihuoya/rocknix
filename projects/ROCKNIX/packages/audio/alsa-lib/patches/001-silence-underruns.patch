@@ -1,14 +1,14 @@
 diff -rupN alsa-lib-1.2.8.orig/src/pcm/pcm.c alsa-lib-1.2.8/src/pcm/pcm.c
---- alsa-lib-1.2.8.orig/src/pcm/pcm.c	2023-02-08 15:16:54.463152310 -0500
-+++ alsa-lib-1.2.8/src/pcm/pcm.c	2023-02-08 15:17:08.347091741 -0500
-@@ -8566,8 +8566,8 @@ int snd_pcm_recover(snd_pcm_t *pcm, int
-                         s = "underrun";
-                 else
-                         s = "overrun";
--                if (!silent)
--                        SNDERR("%s occurred", s);
-+                //if (!silent)
-+                //        SNDERR("%s occurred", s);
-                 err = snd_pcm_prepare(pcm);
-                 if (err < 0) {
-                         SNDERR("cannot recovery from %s, prepare failed: %s", s, snd_strerror(err));
+--- alsa-lib-1.2.16.orig/src/pcm/pcm.c	2026-06-01 04:44:03.000000000 -0400
++++ alsa-lib-1.2.16/src/pcm/pcm.c	2026-06-02 20:40:00.000000000 -0400
+@@ -8780,8 +8780,8 @@ int snd_pcm_recover(snd_pcm_t *pcm, int
+ 			s = "underrun";
+ 		else
+ 			s = "overrun";
+-		if (!silent)
+-			snd_error(PCM, "%s occurred", s);
++		//if (!silent)
++		//	snd_error(PCM, "%s occurred", s);
+ 		err = snd_pcm_prepare(pcm);
+ 		if (err < 0) {
+ 			snd_error(PCM, "cannot recovery from %s, prepare failed: %s", s, snd_strerror(err));
