@@ -136,6 +136,8 @@ jobs:
       - name: Build
         id: build_step
         if: steps.aarch64_hit.outputs.hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
         run: |
           ./scripts/get_env > .env
           # Heartbeat: keep GitHub from killing us during long silent builds
@@ -148,6 +150,28 @@ jobs:
             done
           ) &
           HEARTBEAT_PID=$!
+          # Checkpoint: save partial cache every 2 hours in case runner is lost
+          (
+            KEY="${{ steps.aarch64_key.outputs.key }}"
+            ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}-partial.tar.zst"
+            RELEASE_TAG="aarch64-${{ inputs.DEVICE }}"
+            sleep 5600
+            while true; do
+              echo "[checkpoint] Creating partial cache at $(date -Iseconds)"
+              tar --zstd --exclude='./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache' -cf "${ASSET}" ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/ 2>/dev/null || true
+              split -n 5 "${ASSET}" "${ASSET}." 2>/dev/null || true
+              rm -f "${ASSET}"
+              gh release create "${RELEASE_TAG}" --title "AArch64 cache for ${{ inputs.DEVICE }}" --notes "Auto-generated aarch64 cache" --prerelease --repo weihuoya/rocknix || true
+              gh release upload "${RELEASE_TAG}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || true
+              gh release upload "${RELEASE_TAG}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || true
+              gh release upload "${RELEASE_TAG}" "${ASSET}.ac" --clobber --repo weihuoya/rocknix || true
+              gh release upload "${RELEASE_TAG}" "${ASSET}.ad" --clobber --repo weihuoya/rocknix || true
+              gh release upload "${RELEASE_TAG}" "${ASSET}.ae" --clobber --repo weihuoya/rocknix || true
+              rm -f "${ASSET}."*
+              sleep 7200
+            done
+          ) &
+          CHECKPOINT_PID=$!
           set -e
           { docker run --init --env-file .env --rm \
             --memory=14g --memory-swap=22g \
@@ -156,6 +180,7 @@ jobs:
             "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
             bash -c "./scripts/build_distro"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
           kill $HEARTBEAT_PID 2>/dev/null || true
+          kill $CHECKPOINT_PID 2>/dev/null || true
           exit_code=$(<docker_exit_code)
           exit $exit_code
 
