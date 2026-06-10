@@ -3,8 +3,8 @@
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="nspr"
-PKG_VERSION="4.36"
-PKG_LICENSE="Mozilla Public License"
+PKG_VERSION="4.39"
+PKG_LICENSE="MPL-2.0"
 PKG_SITE="http://www.linuxfromscratch.org/blfs/view/svn/general/nspr.html"
 PKG_DEPENDS_HOST="ccache:host"
 PKG_DEPENDS_TARGET="autotools:host gcc:host nss:host nspr:host"
@@ -23,7 +23,10 @@ PKG_MAKEINSTALL_OPTS_TARGET="NSINSTALL=${TOOLCHAIN}/bin/nsinstall"
 
 configure_host() {
   cd $(get_build_dir nss)/nspr
-  ./configure --with-pthreads --enable-64bit --with-pthreads --prefix=${TOOLCHAIN}
+  export HOST_CFLAGS="${HOST_CFLAGS}"
+  export HOST_CXXFLAGS="${HOST_CXXFLAGS}"
+  export HOST_LDFLAGS="${HOST_LDFLAGS}"
+  ./configure --with-pthreads --enable-64bit --prefix=${TOOLCHAIN}
 }
 
 pre_make_host() {
@@ -33,6 +36,9 @@ pre_make_host() {
 
 configure_target() {
   cd $(get_build_dir nss)/nspr
+  export HOST_CFLAGS="${HOST_CFLAGS}"
+  export HOST_CXXFLAGS="${HOST_CXXFLAGS}"
+  export HOST_LDFLAGS="${HOST_LDFLAGS}"
   ./configure --with-pthreads ${TARGET_USE_64} ${TARGET_CONFIGURE_OPTS}
 }
 

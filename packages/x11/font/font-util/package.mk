@@ -4,10 +4,11 @@
 
 PKG_NAME="font-util"
 PKG_VERSION="1.4.1"
-PKG_SHA256="5c9f64123c194b150fee89049991687386e6ff36ef2af7b80ba53efaf368cc95"
+PKG_SHA256="126ab9e5ee5cb3be2db2590cef1cb91cecde0e89d897d4199c8ba8f1319540dc"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/font/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/font/util/-/archive/font-util-1.4.1/util-font-util-1.4.1.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros"
 PKG_DEPENDS_HOST="util-macros"
 PKG_LONGDESC="X.org font utilities."

@@ -1,14 +1,7 @@
-Submitted By:            Armin K. <krejzi at email dot com>
-Date:                    2013-07-02
-Initial Package Version: 3.15
-Upstream Status:         Not applicable
-Origin:                  Based on dj's original patch, rediffed and modified for 3.15
-Description:             Adds auto-generated nss.pc and nss-config script, and allows
-                         building without nspr in the source tree.
-
---- a/nss/config/Makefile	1970-01-01 01:00:00.000000000 +0100
-+++ b/nss/config/Makefile	2013-07-02 14:53:56.684750636 +0200
-@@ -0,0 +1,40 @@
+diff -uNr a/nss/config/Makefile b/nss/config/Makefile
+--- a/nss/config/Makefile	1970-01-01 08:00:00.000000000 +0800
++++ b/nss/config/Makefile	2026-06-04 21:56:11.031465443 +0800
+@@ -0,0 +1,46 @@
 +CORE_DEPTH = ..
 +DEPTH      = ..
 +
@@ -17,6 +10,7 @@ Description:             Adds auto-generated nss.pc and nss-config script, and a
 +NSS_MAJOR_VERSION = `grep "NSS_VMAJOR" ../lib/nss/nss.h | awk '{print $$3}'`
 +NSS_MINOR_VERSION = `grep "NSS_VMINOR" ../lib/nss/nss.h | awk '{print $$3}'`
 +NSS_PATCH_VERSION = `grep "NSS_VPATCH" ../lib/nss/nss.h | awk '{print $$3}'`
++NSS_NSPR_MINIMUM = `head -n1 ../automation/release/nspr-version.txt`
 +PREFIX = /usr
 +
 +all: export libs
@@ -25,12 +19,13 @@ Description:             Adds auto-generated nss.pc and nss-config script, and a
 +	# Create the nss.pc file
 +	mkdir -p $(DIST)/lib/pkgconfig
 +	sed -e "s,@prefix@,$(PREFIX)," \
-+	    -e "s,@exec_prefix@,\$${prefix}," \
-+	    -e "s,@libdir@,\$${prefix}/lib," \
-+	    -e "s,@includedir@,\$${prefix}/include/nss," \
++	    -e "s,@exec_prefix@,$(PREFIX)," \
++	    -e "s,@libdir@,$(PREFIX)/lib," \
++	    -e "s,@includedir@,$(PREFIX)/include/nss," \
 +	    -e "s,@NSS_MAJOR_VERSION@,$(NSS_MAJOR_VERSION),g" \
 +	    -e "s,@NSS_MINOR_VERSION@,$(NSS_MINOR_VERSION)," \
 +	    -e "s,@NSS_PATCH_VERSION@,$(NSS_PATCH_VERSION)," \
++	    -e "s,@NSS_NSPR_MINIMUM@,$(NSS_NSPR_MINIMUM)," \
 +	    nss.pc.in > nss.pc
 +	chmod 0644 nss.pc
 +	ln -sf ../../../../nss/config/nss.pc $(DIST)/lib/pkgconfig
@@ -47,10 +42,15 @@ Description:             Adds auto-generated nss.pc and nss-config script, and a
 +
 +libs:
 +
-+dummy: all export libs
++clean:
++	rm -f nss.pc nss-config
 +
---- a/nss/config/nss-config.in	1970-01-01 01:00:00.000000000 +0100
-+++ b/nss/config/nss-config.in	2013-07-02 14:52:58.328084334 +0200
++clobber: clean
++
++dummy: all export libs
+diff -uNr a/nss/config/nss-config.in b/nss/config/nss-config.in
+--- a/nss/config/nss-config.in	1970-01-01 08:00:00.000000000 +0800
++++ b/nss/config/nss-config.in	2026-06-04 21:59:04.033583000 +0800
 @@ -0,0 +1,153 @@
 +#!/bin/sh
 +
@@ -205,8 +205,9 @@ Description:             Adds auto-generated nss.pc and nss-config script, and a
 +      echo $libdirs
 +fi      
 +
---- a/nss/config/nss.pc.in	1970-01-01 01:00:00.000000000 +0100
-+++ b/nss/config/nss.pc.in	2013-07-02 14:52:58.328084334 +0200
+diff -uNr a/nss/config/nss.pc.in b/nss/config/nss.pc.in
+--- a/nss/config/nss.pc.in	1970-01-01 08:00:00.000000000 +0800
++++ b/nss/config/nss.pc.in	2026-06-04 21:56:32.496070346 +0800
 @@ -0,0 +1,12 @@
 +prefix=@prefix@
 +exec_prefix=@exec_prefix@
@@ -216,28 +217,19 @@ Description:             Adds auto-generated nss.pc and nss-config script, and a
 +Name: NSS
 +Description: Network Security Services
 +Version: @NSS_MAJOR_VERSION@.@NSS_MINOR_VERSION@.@NSS_PATCH_VERSION@
-+Requires: nspr >= 4.8
++Requires: nspr >= @NSS_NSPR_MINIMUM@
 +Libs: -L@libdir@ -lnss@NSS_MAJOR_VERSION@ -lnssutil@NSS_MAJOR_VERSION@ -lsmime@NSS_MAJOR_VERSION@ -lssl@NSS_MAJOR_VERSION@ -lsoftokn@NSS_MAJOR_VERSION@
 +Cflags: -I${includedir}
 +
---- a/nss/Makefile.orig	2020-12-19 09:07:22.015285016 +0000
-+++ a/nss/Makefile	2020-12-19 09:17:06.966350898 +0000
-@@ -48,7 +48,6 @@
- #######################################################################
- 
- nss_build_all:
--	$(MAKE) build_nspr
- 	$(MAKE) all
- 	$(MAKE) latest
- 
---- a/nss/manifest.mn	2013-05-28 23:43:24.000000000 +0200
-+++ b/nss/manifest.mn	2013-07-02 14:52:58.331417666 +0200
+diff -uNr a/nss/manifest.mn b/nss/manifest.mn
+--- a/nss/manifest.mn	2026-05-15 22:57:13.000000000 +0800
++++ b/nss/manifest.mn	2026-06-04 21:56:59.825005532 +0800
 @@ -10,7 +10,7 @@
  
  RELEASE = nss
  
 -DIRS = coreconf lib cmd cpputil gtests
-+DIRS = coreconf lib cmd config
++DIRS = coreconf lib cmd cpputil gtests config
  
  HAVE_ALL_TARGET := 1
  

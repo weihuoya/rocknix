@@ -20,7 +20,4 @@ if [  "${WINDOWMANAGER}" = "sway" ]; then
   PKG_DEPENDS_TARGET+=" wlr-randr"
 fi
 
-# NVIDIA drivers for Linux
-if listcontains "${GRAPHIC_DRIVERS}" "nvidia-ng"; then
-  PKG_DEPENDS_TARGET+=" nvidia"
-fi
+

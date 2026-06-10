@@ -4,10 +4,11 @@
 
 PKG_NAME="libICE"
 PKG_VERSION="1.1.2"
-PKG_SHA256="974e4ed414225eb3c716985df9709f4da8d22a67a2890066bc6dfc89ad298625"
+PKG_SHA256="f51084de058daa6d4eb74cb2754ac86a154fe886ae24e67822cf73bca3d41dd8"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libice/-/archive/libICE-1.1.2/libice-libICE-1.1.2.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros xtrans"
 PKG_LONGDESC="X Inter-Client Exchange (ICE) protocol library."
 PKG_BUILD_FLAGS="+pic"

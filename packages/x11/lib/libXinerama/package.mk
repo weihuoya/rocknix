@@ -4,10 +4,11 @@
 
 PKG_NAME="libXinerama"
 PKG_VERSION="1.1.5"
-PKG_SHA256="5094d1f0fcc1828cb1696d0d39d9e866ae32520c54d01f618f1a3c1e30c2085c"
+PKG_SHA256="dbf21b4db9534ea37894e873b826f4698564ae40b89d07b8ee3faf160a54df2b"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxinerama/-/archive/libXinerama-1.1.5/libxinerama-libXinerama-1.1.5.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libXext"
 PKG_LONGDESC="libXinerama is the Xinerama library."
 

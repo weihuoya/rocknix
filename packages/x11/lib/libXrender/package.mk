@@ -4,10 +4,11 @@
 
 PKG_NAME="libXrender"
 PKG_VERSION="0.9.12"
-PKG_SHA256="b832128da48b39c8d608224481743403ad1691bf4e554e4be9c174df171d1b97"
+PKG_SHA256="a4540eb38f91a895288c304d2e7156d8bf2bf64f61ce7cdd8260d3bd290784e2"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxrender/-/archive/libXrender-0.9.12/libxrender-libXrender-0.9.12.tar.bz2"
+PKG_TOOLCHAIN="autotools"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11"
 PKG_LONGDESC="The X Rendering Extension introduces digital image composition within the X Window System."
 PKG_BUILD_FLAGS="+pic"

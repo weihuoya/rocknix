@@ -4,10 +4,11 @@
 
 PKG_NAME="libXScrnSaver"
 PKG_VERSION="1.2.4"
-PKG_SHA256="75cd2859f38e207a090cac980d76bc71e9da99d48d09703584e00585abc920fe"
+PKG_SHA256="0b8a054ba576a6fb8d000d8983699c001114ad2028840721dda0b0d66c06bece"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="GPL"
 PKG_SITE="https://xorg.freedesktop.org/"
-PKG_URL="https://xorg.freedesktop.org/releases/individual/lib/libXScrnSaver-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxscrnsaver/-/archive/libXScrnSaver-1.2.4/libxscrnsaver-libXScrnSaver-1.2.4.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain libXext scrnsaverproto"
 PKG_LONGDESC="X11 Screen Saver extension client library."
 PKG_BUILD_FLAGS="-sysroot"

@@ -4,10 +4,11 @@
 
 PKG_NAME="xrandr"
 PKG_VERSION="1.5.3"
-PKG_SHA256="f8dd7566adb74147fab9964680b6bbadee87cf406a7fcff51718a5e6949b841c"
+PKG_SHA256="67ee81666ae97103acf289ac4b609476c3f0c20f65377edf5b35d18a0bda2483"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/app/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/app/xrandr/-/archive/xrandr-1.5.3/xrandr-xrandr-1.5.3.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libXrandr"
 PKG_LONGDESC="Xrandr is a primitive command line interface to the RandR extension and used to set the screen size, orientation and/or reflection."
 

@@ -4,10 +4,11 @@
 
 PKG_NAME="util-macros"
 PKG_VERSION="1.20.2"
-PKG_SHA256="9ac269eba24f672d7d7b3574e4be5f333d13f04a7712303b1821b2a51ac82e8e"
+PKG_SHA256="e817e356ae6a2b72978a7ffecf7c2ab47aef376827af0a0e1cf2c6fd2f542d62"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/util/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/util/macros/-/archive/util-macros-1.20.2/macros-util-macros-1.20.2.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="X.org autoconf utilities such as M4 macros."
 PKG_BUILD_FLAGS="-cfg-libs"
