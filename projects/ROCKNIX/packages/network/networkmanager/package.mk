@@ -2,10 +2,11 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="networkmanager"
-PKG_VERSION="1.51.4"
+PKG_VERSION="1.56.1"
+PKG_SHA256="e40f24c2dc9f8408c8183e495f3b5d783204d116c8f23100d00c714ac4ed9252"
 PKG_LICENSE="GPL"
 PKG_SITE="https://gitlab.freedesktop.org/NetworkManager/NetworkManager"
-PKG_URL="https://download.gnome.org/sources/NetworkManager/1.51/NetworkManager-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/NetworkManager/NetworkManager/-/archive/${PKG_VERSION}/NetworkManager-${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain glib dbus libndp nss nspr systemd util-linux readline ncurses"
 PKG_LONGDESC="Network connection manager (Ethernet and Wi-Fi; Wi-Fi via iwd backend)"
 PKG_TOOLCHAIN="meson"
@@ -54,6 +55,8 @@ PKG_MESON_OPTS_TARGET="
   -Dreadline=auto
   -Dconfig_plugins_default=keyfile
   -Dcrypto=nss
+  -Dnbft=false
+  -Dman=false
 "
 
 post_makeinstall_target() {

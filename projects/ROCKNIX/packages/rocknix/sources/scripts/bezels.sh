@@ -212,6 +212,6 @@ fi
 # 2. For Arcade games, I created a bezelmap.cfg in $BEZELDIR/ in order to share bezels between arcade clones and parent. 
 #	In fact, ROMs of other platforms can share certain bezel if you write mapping relationship in bezelmap.cfg.
 # 3. I modified es_systems.cfg to set $1 as platfrom for all platfrom.
-#	For some libretro core such as <command>/usr/bin/sx05reRunEmu.sh LIBRETRO scummvm %ROM%</command>, $1 not right platform value,
+#	For some libretro cores $1 may not be the right platform value,
 #	you may need some tunings on them.
 # 4. I am a Linux noob, so the codes are a mess. Sorry for that:)

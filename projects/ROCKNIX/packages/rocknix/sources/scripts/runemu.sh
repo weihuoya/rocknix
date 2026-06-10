@@ -247,11 +247,6 @@ case ${EMULATOR} in
       "atomiswave")
         rm ${ROMNAME}.nvmem*
       ;;
-      "scummvm")
-        GAMEDIR=$(cat "${ROMNAME}" | awk 'BEGIN {FS="\""}; {print $2}')
-        cd "${GAMEDIR}"
-        RUNTHIS='${RUN_SHELL} /usr/bin/start_scummvm.sh libretro .'
-      ;;
     esac
 
     ### Configure retroarch
@@ -410,7 +405,7 @@ if [ "${DEVICE_MANGOHUD_SUPPORT}" == "true" ]; then
   fi
 fi
 
-# If the rom is a shell script just execute it, useful for DOSBOX and ScummVM scan scripts
+# If the rom is a shell script just execute it, useful for DOSBOX scan scripts
 if [[ "${ROMNAME}" == *".sh" ]] && [ ! "${PLATFORM}" = "ports" ] && [ ! "${PLATFORM}" = "windows" ]; then
         ${VERBOSE} && log $0 "Executing shell script ${ROMNAME}"
         "${ROMNAME}" &>>${OUTPUT_LOG}

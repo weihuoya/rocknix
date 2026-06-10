@@ -1,0 +1,15 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -134,9 +134,9 @@ install: progs $(srcdir)/doc/socat.1
+ 	mkdir -p $(DESTDIR)$(BINDEST)
+ 	$(INSTALL) -m 755 socat $(DESTDIR)$(BINDEST)/socat1
+ 	ln -sf socat1 $(DESTDIR)$(BINDEST)/socat
+-	$(INSTALL) -m 755 socat-chain.sh  $(DESTDIR)$(BINDEST)
+-	$(INSTALL) -m 755 socat-mux.sh    $(DESTDIR)$(BINDEST)
+-	$(INSTALL) -m 755 socat-broker.sh $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 755 $(srcdir)/socat-chain.sh  $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 755 $(srcdir)/socat-mux.sh    $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 755 $(srcdir)/socat-broker.sh $(DESTDIR)$(BINDEST)
+ 	$(INSTALL) -m 755 procan $(DESTDIR)$(BINDEST)
+ 	$(INSTALL) -m 755 filan $(DESTDIR)$(BINDEST)
+ 	mkdir -p $(DESTDIR)$(MANDEST)/man1

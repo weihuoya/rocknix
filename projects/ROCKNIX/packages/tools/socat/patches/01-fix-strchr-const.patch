@@ -1,0 +1,25 @@
+--- a/filan.c
++++ b/filan.c
+@@ -364,12 +364,12 @@ int filan(FILE *infile, FILE *outfile, const char *filename, int fd) {
+    {
+       fputc('\t', outfile);
+       time = asctime(localtime(&buf->st_mtime));
+-      if (strchr(time, '\n'))  *strchr(time, '\n') = '\0';
++      if (strchr(time, '\n'))  *(char *)strchr(time, '\n') = '\0';
+       fputs(time, outfile);
+ 
+       fputc('\t', outfile);
+       time = asctime(localtime(&buf->st_ctime));
+-      if (strchr(time, '\n'))  *strchr(time, '\n') = '\0';
++      if (strchr(time, '\n'))  *(char *)strchr(time, '\n') = '\0';
+       fputs(time, outfile);
+    }
+ #endif
+@@ -1112,7 +1112,7 @@ int main(int argc, const char *argv[], const char *envp[]) {
+       fputc('\t', outfile);
+       s = asctime(localtime(&time));
+-      if (strchr(s, '\n'))  *strchr(s, '\n') = '\0';
++      if (strchr(s, '\n'))  *(char *)strchr(s, '\n') = '\0';
+       fputs(s, outfile);
+    }
+    return 0;
