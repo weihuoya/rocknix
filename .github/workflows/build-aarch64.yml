@@ -16,7 +16,6 @@ on:
 jobs:
   build-aarch64:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
     env:
       EMULATION_DEVICE: no
       ENABLE_32BIT: no
@@ -49,7 +48,8 @@ jobs:
       - name: Retrieve prebuilt aarch64
         id: aarch64_hit
         run: |
-          ASSET="aarch64-${{ inputs.DEVICE }}-${{ steps.aarch64_key.outputs.key }}.tar.zst"
+          KEY="${{ steps.aarch64_key.outputs.key }}"
+          ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}.tar.zst"
           PART_A="${ASSET}.aa"
           PART_B="${ASSET}.ab"
           PART_C="${ASSET}.ac"
@@ -69,8 +69,30 @@ jobs:
             echo "Prebuilt aarch64 downloaded and extracted."
           else
             rm -f "${PART_A}" "${PART_B}" "${PART_C}" "${PART_D}" "${PART_E}" "${ASSET}"
-            echo "hit=false" >> $GITHUB_OUTPUT
-            echo "Prebuilt aarch64 not found, will build from source."
+
+            # Try partial cache from previous failed build
+            PARTIAL_ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}-partial.tar.zst"
+            PARTIAL_PART_A="${PARTIAL_ASSET}.aa"
+            PARTIAL_PART_B="${PARTIAL_ASSET}.ab"
+            PARTIAL_PART_C="${PARTIAL_ASSET}.ac"
+            PARTIAL_PART_D="${PARTIAL_ASSET}.ad"
+            PARTIAL_PART_E="${PARTIAL_ASSET}.ae"
+            if curl -L --fail --silent --show-error "${URL_BASE}/${PARTIAL_PART_A}" -o "${PARTIAL_PART_A}" && \
+               curl -L --fail --silent --show-error "${URL_BASE}/${PARTIAL_PART_B}" -o "${PARTIAL_PART_B}" && \
+               curl -L --fail --silent --show-error "${URL_BASE}/${PARTIAL_PART_C}" -o "${PARTIAL_PART_C}" && \
+               curl -L --fail --silent --show-error "${URL_BASE}/${PARTIAL_PART_D}" -o "${PARTIAL_PART_D}" && \
+               curl -L --fail --silent --show-error "${URL_BASE}/${PARTIAL_PART_E}" -o "${PARTIAL_PART_E}"; then
+              cat "${PARTIAL_PART_A}" "${PARTIAL_PART_B}" "${PARTIAL_PART_C}" "${PARTIAL_PART_D}" "${PARTIAL_PART_E}" > "${PARTIAL_ASSET}"
+              rm -f "${PARTIAL_PART_A}" "${PARTIAL_PART_B}" "${PARTIAL_PART_C}" "${PARTIAL_PART_D}" "${PARTIAL_PART_E}"
+              tar --zstd -xf "${PARTIAL_ASSET}"
+              rm -f "${PARTIAL_ASSET}"
+              echo "hit=partial" >> $GITHUB_OUTPUT
+              echo "Partial cache downloaded, will continue building."
+            else
+              rm -f "${PARTIAL_PART_A}" "${PARTIAL_PART_B}" "${PARTIAL_PART_C}" "${PARTIAL_PART_D}" "${PARTIAL_PART_E}" "${PARTIAL_ASSET}"
+              echo "hit=false" >> $GITHUB_OUTPUT
+              echo "Prebuilt aarch64 not found, will build from source."
+            fi
           fi
 
       - name: Restore ccache
@@ -112,6 +134,7 @@ jobs:
           fi
 
       - name: Build
+        id: build_step
         if: steps.aarch64_hit.outputs.hit != 'true'
         run: |
           ./scripts/get_env > .env
@@ -177,16 +200,44 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
         run: |
-          ASSET="aarch64-${{ inputs.DEVICE }}-${{ steps.aarch64_key.outputs.key }}.tar.zst"
+          KEY="${{ steps.aarch64_key.outputs.key }}"
+          ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}.tar.zst"
           tar --zstd --exclude='./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache' -cf "${ASSET}" ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/
           split -n 5 "${ASSET}" "${ASSET}."
           rm -f "${ASSET}"
-          gh release create "aarch64-${{ inputs.DEVICE }}" --title "AArch64 cache for ${{ inputs.DEVICE }}" --notes "Auto-generated aarch64 cache" --prerelease --repo weihuoya/rocknix || true
-          gh release upload "aarch64-${{ inputs.DEVICE }}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.aa, continuing..."
-          gh release upload "aarch64-${{ inputs.DEVICE }}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ab, continuing..."
-          gh release upload "aarch64-${{ inputs.DEVICE }}" "${ASSET}.ac" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ac, continuing..."
-          gh release upload "aarch64-${{ inputs.DEVICE }}" "${ASSET}.ad" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ad, continuing..."
-          gh release upload "aarch64-${{ inputs.DEVICE }}" "${ASSET}.ae" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ae, continuing..."
+          RELEASE_TAG="aarch64-${{ inputs.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --title "AArch64 cache for ${{ inputs.DEVICE }}" --notes "Auto-generated aarch64 cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "${RELEASE_TAG}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.aa, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ab, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ac" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ac, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ad" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ad, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ae" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ae, continuing..."
+
+          # Delete partial cache since full cache is now available
+          PARTIAL_ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}-partial.tar.zst"
+          gh release delete-asset "${RELEASE_TAG}" "${PARTIAL_ASSET}.aa" --repo weihuoya/rocknix || true
+          gh release delete-asset "${RELEASE_TAG}" "${PARTIAL_ASSET}.ab" --repo weihuoya/rocknix || true
+          gh release delete-asset "${RELEASE_TAG}" "${PARTIAL_ASSET}.ac" --repo weihuoya/rocknix || true
+          gh release delete-asset "${RELEASE_TAG}" "${PARTIAL_ASSET}.ad" --repo weihuoya/rocknix || true
+          gh release delete-asset "${RELEASE_TAG}" "${PARTIAL_ASSET}.ae" --repo weihuoya/rocknix || true
+
+      - name: Upload partial prebuilt aarch64
+        if: failure() && steps.build_step.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          KEY="${{ steps.aarch64_key.outputs.key }}"
+          ASSET="aarch64-${{ inputs.DEVICE }}-${KEY}-partial.tar.zst"
+          tar --zstd --exclude='./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache' -cf "${ASSET}" ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/
+          split -n 5 "${ASSET}" "${ASSET}."
+          rm -f "${ASSET}"
+          RELEASE_TAG="aarch64-${{ inputs.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --title "AArch64 cache for ${{ inputs.DEVICE }}" --notes "Auto-generated aarch64 cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "${RELEASE_TAG}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.aa, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ab, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ac" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ac, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ad" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ad, continuing..."
+          gh release upload "${RELEASE_TAG}" "${ASSET}.ae" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ae, continuing..."
 
       - name: Upload cache key
         run: |

@@ -16,7 +16,6 @@ on:
 jobs:
   build-aarch64-emu-libretro:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
     permissions:
       actions: write
       contents: write
