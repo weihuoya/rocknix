@@ -1,2 +1,6 @@
 #!/usr/bin/env bash
-for var in $(compgen -e); do echo "$var=${!var}"; done
+for var in $(compgen -e); do
+  # PWD must match the container's working directory, not the host's
+  [ "$var" = "PWD" ] && continue
+  echo "$var=${!var}"
+done

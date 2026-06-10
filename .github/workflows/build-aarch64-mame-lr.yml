@@ -16,12 +16,12 @@ on:
 jobs:
   build-aarch64-mame-lr:
     runs-on: ubuntu-24.04
+    timeout-minutes: 360
     env:
       JAVA_HOME: /usr
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       ARCH: aarch64
-      CACHE_KEY: ccache-aarch64-${{ inputs.DEVICE }}-mame-${{ github.sha }}
       DISABLE_COLORS: yes
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: 1
@@ -31,48 +31,93 @@ jobs:
       - name: Maximize build space
         uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
-          skip-components: docker-engine
+          skip-components: docker-engine,gh-cli
 
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Retrieve ccache
+      - name: Compute mame-lr key
+        id: mame_key
         run: |
-          URL="https://github.com/${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}/releases/download/ccache/ccache-aarch64-${{ inputs.DEVICE }}-mame.tar"
-          curl -L --fail --silent --show-error "$URL" | tar -xvf - || echo "Cache archive not found, skipping."
+          KEY=$(find projects/ROCKNIX/packages/emulators/libretro/mame-lr -type f | sort | xargs cat | sha256sum | cut -d' ' -f1 | cut -c1-16)
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Retrieve prebuilt mame-lr
+        id: mame_hit
+        run: |
+          ASSET="mame-lr-aarch64-${{ inputs.DEVICE }}-${{ steps.mame_key.outputs.key }}.tar.zst"
+          URL="https://github.com/weihuoya/rocknix/releases/download/mame-lr-aarch64-${{ inputs.DEVICE }}/${ASSET}"
+          if curl -L --fail --silent --show-error "$URL" -o "$ASSET"; then
+            tar --zstd -xf "$ASSET"
+            rm -f "$ASSET"
+            echo "hit=true" >> $GITHUB_OUTPUT
+            echo "Prebuilt mame-lr downloaded and extracted."
+          else
+            echo "hit=false" >> $GITHUB_OUTPUT
+            echo "Prebuilt mame-lr not found, will build from source."
+          fi
+
+      - name: Restore ccache
+        if: steps.mame_hit.outputs.hit != 'true'
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-mame-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ inputs.DEVICE }}-mame-
 
       - name: Download aarch64-toolchain (${{ inputs.DEVICE }})
+        if: steps.mame_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: aarch64-toolchain (${{ inputs.DEVICE }})
 
       - name: Extract artifact aarch64-toolchain
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            tar --zstd -xf build.aarch64-toolchain.tar.zst
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed aarch64 file
-        run: rm build.aarch64-toolchain.tar.zst
-
+        if: steps.mame_hit.outputs.hit != 'true'
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < toolchain-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Build
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            ./scripts/get_env > .env
-            set -e
-            { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-              bash -c "./scripts/build_mt mame-lr"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
-            exit_code=$(<docker_exit_code)
-            exit $exit_code
-          max_attempts: 6
-          retry_interval: 10
+        if: steps.mame_hit.outputs.hit != 'true'
+        run: |
+          ./scripts/get_env > .env
+          # Heartbeat: keep GitHub from killing us during long silent builds
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+            bash -c "./scripts/build_mt mame-lr"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
 
-      - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-mame-lr
+      - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-mame-lr)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
@@ -82,40 +127,57 @@ jobs:
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
 
       - name: Clean ccache
+        if: steps.mame_hit.outputs.hit != 'true'
         run: |
           export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -M 500M
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -c
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -z
-
-      - name: Tar ccache
-        run: |
-           tar -cf ccache-aarch64-${{ inputs.DEVICE }}-mame.tar ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache  
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 3G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
 
       - name: Save ccache
-        uses: ncipollo/release-action@v1
+        if: always() && steps.mame_hit.outputs.hit != 'true'
+        uses: actions/cache/save@v5
         with:
-          tag: ccache
-          artifacts: ccache-aarch64-${{ inputs.DEVICE }}-mame.tar
-          allowUpdates: true
-          makeLatest: true
-          prerelease: true
-          body: ccache
-          token: ${{ secrets.GH_PAT }}
-          repo: ${{ vars.CACHE_REPO || 'distribution-cache' }}
-        continue-on-error: true
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-mame-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Compress directory
+        if: steps.mame_hit.outputs.hit != 'true'
         run: |
           tar --zstd -cf build.mame-lr.tar.zst \
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/install_pkg/mame-lr-* \
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.stamps
 
+      - name: Upload cache key
+        run: |
+          echo "mame-lr-aarch64-${{ inputs.DEVICE }}-${{ steps.mame_key.outputs.key }}.tar.zst" > mame-lr-key.txt
       - uses: actions/upload-artifact@v7
         with:
           name: mame-lr (${{ inputs.DEVICE }})
-          path: build.mame-lr.tar.zst
-          compression-level: 0
+          path: mame-lr-key.txt
           if-no-files-found: error
+
+      - name: Upload prebuilt mame-lr
+        if: steps.mame_hit.outputs.hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          ASSET="mame-lr-aarch64-${{ inputs.DEVICE }}-${{ steps.mame_key.outputs.key }}.tar.zst"
+          mv build.mame-lr.tar.zst "${ASSET}"
+          gh release create "mame-lr-aarch64-${{ inputs.DEVICE }}" --title "MAME-lr cache for ${{ inputs.DEVICE }}" --notes "Auto-generated mame-lr cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "mame-lr-aarch64-${{ inputs.DEVICE }}" "${ASSET}" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always() && steps.mame_hit.outputs.hit != 'true'
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

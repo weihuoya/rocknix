@@ -13,8 +13,8 @@ ROCKNIX is an immutable Linux distribution for handheld gaming devices developed
 * Includes support for playing Music and Video.
 * Bluetooth audio and controller support.
 * Support for HDMI audio and video out, and USB audio.
-* Device to device and device to cloud sync with Syncthing and rclone.
-* VPN support with Wireguard, Tailscale, and ZeroTier.
+* Device to device and device to cloud sync with Syncthing.
+* VPN support with Wireguard.
 * Includes built-in support for scraping and retroachievements.
 
 ## Screenshots
