@@ -6,7 +6,7 @@ PKG_VERSION="1.0"
 PKG_LICENSE="custom"
 PKG_SITE=""
 PKG_URL=""
-PKG_DEPENDS_TARGET="toolchain rclone commander"
+PKG_DEPENDS_TARGET="toolchain commander"
 PKG_LONGDESC="OS Modules Package"
 PKG_TOOLCHAIN="manual"
 

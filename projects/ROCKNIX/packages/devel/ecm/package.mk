@@ -2,9 +2,10 @@
 # Copyright (C) 2022-present JELOS (https://github.com/JustEnoughLinuxOS)
 
 PKG_NAME="ecm"
-PKG_VERSION="v6.16.0"
+PKG_VERSION="v6.26.0"
 PKG_LICENSE="GPLv3"
 PKG_SITE="https://github.com/KDE/extra-cmake-modules"
+PKG_SHA256="9b1219db8f6aab5b1b7dde839c03ff0f5303492ab1e0099f5828a9a1e8088b8a"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
 PKG_LONGDESC="KDE Extra CMake Modules"
 PKG_DEPENDS_TARGET="toolchain"

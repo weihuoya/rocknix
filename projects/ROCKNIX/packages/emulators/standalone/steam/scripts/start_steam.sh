@@ -148,14 +148,17 @@ steam_launch_bigpicture() {
     touch "$gamescope_mode_file"
   fi
   unset MESA_LOADER_DRIVER_OVERRIDE
+  local steam_runtime_lib
+  steam_runtime_lib=$(echo /storage/.local/share/Steam/steam-runtime-steamrt-arm64/steamrt3c_platform_*/files/lib/aarch64-linux-gnu | head -n 1)
+  [ -d "${steam_runtime_lib}" ] || steam_runtime_lib=""
   if [ "${STEAM_FLAVOR}" = "arm64" ]; then
-    SDL_VIDEODRIVER=x11 LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/ ${EMUPERF} /storage/.local/share/Steam/steamrtarm64/steam -steamdeck -exitsteam
+    SDL_VIDEODRIVER=x11 LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/${steam_runtime_lib:+:${steam_runtime_lib}} ${EMUPERF} /storage/.local/share/Steam/steamrtarm64/steam -steamdeck -exitsteam
     if [ "${GAMESCOPE}" = "0" ]; then
-      SDL_VIDEODRIVER=x11 LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/ ${EMUPERF} /storage/.local/share/Steam/steamrtarm64/steam -nofriendsui -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
+      SDL_VIDEODRIVER=x11 LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/${steam_runtime_lib:+:${steam_runtime_lib}} ${EMUPERF} /storage/.local/share/Steam/steamrtarm64/steam -nofriendsui -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
       exit 0
     else
       systemctl stop sway
-      GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM=508x286 env -u WAYLAND_DISPLAY LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/ ${EMUPERF} \
+      GAMESCOPE_MODE_SAVE_FILE="${gamescope_mode_file}" GAMESCOPE_FAKE_OUTPUT_MM=508x286 env -u WAYLAND_DISPLAY LD_LIBRARY_PATH=/storage/.local/share/Steam/lib/aarch64-linux-gnu/${steam_runtime_lib:+:${steam_runtime_lib}} ${EMUPERF} \
         gamescope $PREFER_OUTPUT -W "$W" -H "$H" -r "$REFRESH_HZ" --xwayland-count 2 --mangoapp --backend drm --force-orientation "${force_orientation}" --use-rotation-shader -e -- \
         /storage/.local/share/Steam/steamrtarm64/steam -steamdeck -steamos3 -gamepadui -noverifyfiles -nobootstrapupdate -skipinitialbootstrap -norepairfiles -noshaders ${game_uri:+"$game_uri"}
       systemctl start essway

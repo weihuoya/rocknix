@@ -41,10 +41,26 @@ install_fex_config() {
 }
 
 ensure_fex_rootfs() {
-  if [ ! -f "${FEX_DATA}/RootFS/ArchLinux.sqsh" ]; then
+  # Already extracted? Nothing to do.
+  if [ -d "${FEX_ARCH_ROOT}" ]; then
+    log_info "FEX RootFS already extracted."
+    cp -f "/usr/share/fex-emu/libvulkan_freedreno.so" "${FEX_ARCH_USR_LIB}" || die "Failed to copy libvulkan_freedreno.so."
+    return 0
+  fi
+
+  mkdir -p "${FEX_DATA}/RootFS" || die "Failed to create RootFS directory."
+
+  local rootfs_image="${FEX_DATA}/RootFS/ArchLinux.sqsh"
+
+  if [ -f "${rootfs_image}" ]; then
+    log_info "Found FEX RootFS image: ${rootfs_image}"
+    log_info "Extracting SquashFS RootFS..."
+    unsquashfs -f -d "${FEX_ARCH_ROOT}" "${rootfs_image}" || die "Failed to extract SquashFS RootFS."
+  else
     log_info "FEX needs to download rootfs before starting Steam. This may take a while..."
     FEXRootFSFetcher --distro-name=arch --distro-version=rolling -y -x || die "Failed to fetch FEX RootFS."
   fi
+
   cp -f "/usr/share/fex-emu/libvulkan_freedreno.so" "${FEX_ARCH_USR_LIB}" || die "Failed to copy libvulkan_freedreno.so."
 }
 
@@ -60,7 +76,14 @@ link_steam_library() {
 ensure_steam_desktop_stub() {
   log_info "Ensuring Steam desktop stub exists..."
   mkdir -p "${APPLICATIONS}"
-  touch "${APPLICATIONS}/Steam.desktop" || die "Failed to create Steam.desktop stub."
+  cat > "${APPLICATIONS}/Steam.desktop" <<EOF || die "Failed to create Steam.desktop stub."
+[Desktop Entry]
+Type=Application
+Name=Steam
+Exec=/usr/bin/start_steam.sh
+Icon=steam
+Categories=Game;
+EOF
 }
 
 install_steam_runtime_arm64() {
@@ -68,10 +91,16 @@ install_steam_runtime_arm64() {
     log_info "Steam runtime already exists. Skipping."
     return 0
   fi
-  log_info "Downloading and installing Steam runtime (ARM64)..."
+  log_info "Installing Steam runtime (ARM64)..."
   local tar_path="${STEAM}/steam-runtime-steamrt-arm64.tar.xz"
 
-  wget -c -t 5 -O "${tar_path}" "${RUNTIME_TAR_URL}" || die "Failed to download Steam runtime."
+  if [ -f "${tar_path}" ]; then
+    log_info "Found existing Steam runtime archive. Skipping download."
+  else
+    log_info "Downloading Steam runtime..."
+    wget -c -t 5 -O "${tar_path}" "${RUNTIME_TAR_URL}" || die "Failed to download Steam runtime."
+  fi
+
   tar xvf "${tar_path}" -C "${STEAM}" || die "Failed to extract Steam runtime."
   rm -f "${tar_path}"
 
@@ -83,6 +112,19 @@ install_steam_runtime_arm64() {
 
   mkdir -p "${STEAM}/lib/aarch64-linux-gnu"
   ln -sf "${target}" "${STEAM}/lib/aarch64-linux-gnu/libibus-1.0.so.5" || die "Failed to symlink libibus."
+
+  local rt_lib
+  rt_lib=$(find "${STEAM}/steam-runtime-steamrt-arm64" -maxdepth 1 -type d -name "steamrt3c_platform_*" | head -n 1)/files/lib/aarch64-linux-gnu
+
+  local lib
+  for lib in libgssapi_krb5.so.2.2 libkrb5.so.3.3 libk5crypto.so.3.1 libcom_err.so.2.1 libkeyutils.so.1.9 libkrb5support.so.0.1; do
+    local src
+    src="${rt_lib}/${lib}"
+    [ -f "${src}" ] || continue
+    local dst
+    dst="${STEAM}/lib/aarch64-linux-gnu/${lib%.*}"
+    ln -sf "${src}" "${dst}" || die "Failed to symlink ${lib}."
+  done
 }
 
 install_steam_client_arm64() {
@@ -90,14 +132,19 @@ install_steam_client_arm64() {
     log_info "Steam client already exists. Skipping."
     return 0
   fi
-  log_info "Downloading and installing Steam client (ARM64)..."
+  log_info "Installing Steam client (ARM64)..."
   local manifest target_file zip_path
-
-  manifest=$(curl -fsSL "${STEAM_MANIFEST_URL}" | strings) || die "Failed to fetch Steam manifest."
-  target_file=$(echo "${manifest}" | grep -oP 'bins_linuxarm64_linuxarm64\.zip\.(?!vz\.)[^"]+') || die "Failed to parse target file from manifest."
   zip_path="${STEAM}/linuxarm64.zip"
 
-  wget -c -t 5 -O "${zip_path}" "${STEAM_CDN}/${target_file}" || die "Failed to download Steam client zip."
+  if [ -f "${zip_path}" ]; then
+    log_info "Found existing Steam client archive. Skipping download."
+  else
+    manifest=$(curl -fsSL "${STEAM_MANIFEST_URL}" | strings) || die "Failed to fetch Steam manifest."
+    target_file=$(echo "${manifest}" | grep -oP 'bins_linuxarm64_linuxarm64\.zip\.(?!vz\.)[^"]+') || die "Failed to parse target file from manifest."
+
+    log_info "Downloading Steam client..."
+    wget -c -t 5 -O "${zip_path}" "${STEAM_CDN}/${target_file}" || die "Failed to download Steam client zip."
+  fi
   unzip -o "${zip_path}" -d "${STEAM}" || die "Failed to extract Steam client."
   rm -f "${zip_path}"
 
@@ -121,6 +168,18 @@ install_bundled_proton_files() {
   cp -f "/usr/share/steam/registry.vdf" "${STEAM_DOT}" || die "Failed to copy registry.vdf."
 }
 
+install_cjk_font_for_steam() {
+  local src="/usr/config/emulationstation/resources/DroidSansFallbackFull.ttf"
+  local dst_dir="/storage/.local/share/fonts"
+  if [ -f "${src}" ]; then
+    log_info "Installing CJK font for Steam..."
+    mkdir -p "${dst_dir}"
+    cp -f "${src}" "${dst_dir}/" || log_info "Failed to copy CJK font, continuing anyway."
+  else
+    log_info "CJK font not found in EmulationStation resources, skipping."
+  fi
+}
+
 install_proton_cachyos() {
   local url="$PROTON_CACHYOS_URL"
   local dest_dir="${STEAM}/compatibilitytools.d"
@@ -139,13 +198,20 @@ install_proton_cachyos() {
   fi
 
   if [ -d "${extracted_dir}" ]; then
-    log_info "Proton-CachyOS already installed. Skipping download."
+    log_info "Proton-CachyOS already installed. Skipping."
     return 0
   fi
 
-  log_info "Downloading and installing Proton-CachyOS..."
+  log_info "Installing Proton-CachyOS..."
   mkdir -p "${dest_dir}"
-  wget -c -t 5 -O "${tar_path}" "$url" || die "Failed to download Proton-CachyOS."
+
+  if [ -f "${tar_path}" ]; then
+    log_info "Found existing Proton-CachyOS archive. Skipping download."
+  else
+    log_info "Downloading Proton-CachyOS..."
+    wget -c -t 5 -O "${tar_path}" "$url" || die "Failed to download Proton-CachyOS."
+  fi
+
   tar -xvf "${tar_path}" -C "${dest_dir}" || die "Failed to extract Proton-CachyOS."
   rm -f "${tar_path}"
 
@@ -186,6 +252,7 @@ install_steam_runtime_arm64
 install_steam_client_arm64
 install_bundled_proton_files
 install_proton_cachyos
+install_cjk_font_for_steam
 run_steam_first_launch
 
 echo ""
