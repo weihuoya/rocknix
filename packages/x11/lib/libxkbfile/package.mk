@@ -4,10 +4,11 @@
 
 PKG_NAME="libxkbfile"
 PKG_VERSION="1.1.3"
-PKG_SHA256="a9b63eea997abb9ee6a8b4fbb515831c841f471af845a09de443b28003874bec"
+PKG_SHA256="50c9c31a94fcfb5dbfb6c27831ef8c2f9313eb47d5079737265c589fe3eaf049"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxkbfile/-/archive/libxkbfile-1.1.3/libxkbfile-libxkbfile-1.1.3.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11"
 PKG_LONGDESC="Libxkbfile provides an interface to read and manipulate description files for XKB, the X11 keyboard configuration extension."
 

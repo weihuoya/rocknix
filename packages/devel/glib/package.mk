@@ -3,8 +3,8 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="glib"
-PKG_VERSION="2.85.1"
-PKG_SHA256="d3f57bcd4202d93aa547ffa1d2a5dbd380a05dbaac04cc291bd7dfce93b4a8e5"
+PKG_VERSION="2.88.1"
+PKG_SHA256="51ab804c56f6eab3e5045c774d1290ac5e4c923d4f9a3d8e33123bee45c1840e"
 PKG_LICENSE="LGPL"
 PKG_SITE="https://www.gtk.org/"
 PKG_URL="https://download.gnome.org/sources/glib/$(get_pkg_version_maj_min)/${PKG_NAME}-${PKG_VERSION}.tar.xz"
@@ -23,12 +23,13 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dselinux=disabled \
                        -Dxattr=true \
                        -Dgtk_doc=false \
-                       -Dman=false \
+                       -Dman-pages=disabled \
                        -Ddtrace=false \
                        -Dsystemtap=false \
                        -Dbsymbolic_functions=true \
                        -Dforce_posix_threads=true \
-                       -Dtests=false"
+                       -Dtests=false \
+                       -Dglib_debug=disabled"
 
 post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/bin

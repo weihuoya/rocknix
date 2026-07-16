@@ -2,11 +2,12 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="libxss"
-PKG_VERSION="1.2.4"
-PKG_SHA256="75cd2859f38e207a090cac980d76bc71e9da99d48d09703584e00585abc920fe"
+PKG_VERSION="1.2.5"
+PKG_SHA256="59db6cfa413aed52dfcac8ab61895580903330164199fc8765fe31d21215f7ff"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/libXScrnSaver-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxscrnsaver/-/archive/libXScrnSaver-1.2.5/libxscrnsaver-libXScrnSaver-1.2.5.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libXext scrnsaverproto"
 PKG_LONGDESC="X11 Screen Saver extension library."
 PKG_BUILD_FLAGS="+pic -sysroot"

@@ -4,10 +4,11 @@
 
 PKG_NAME="xkeyboard-config"
 PKG_VERSION="2.45"
-PKG_SHA256="169e075a92d957a57787c199e84e359df2931b7196c1c5b4a3d576ee6235a87c"
+PKG_SHA256="a790fc16626d77f829525da10978f270af0a34450cf46f0b8164fc77fc494e4d"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="MIT"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://www.x.org/releases/individual/data/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config/-/archive/xkeyboard-config-2.45/xkeyboard-config-xkeyboard-config-2.45.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros"
 PKG_LONGDESC="X keyboard extension data files."
 

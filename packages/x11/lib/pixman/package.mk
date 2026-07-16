@@ -4,10 +4,11 @@
 
 PKG_NAME="pixman"
 PKG_VERSION="0.46.2"
-PKG_SHA256="d075209d18728b1ca5d0bb864aa047a262a1fde206da8a677d6af75b2ee1ae98"
+PKG_SHA256="3334ca7440881c6c72592ba08d31f2d6d5d30484072c712028a7308192071d0e"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.x.org/"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/pixman/pixman/-/archive/pixman-0.46.2/pixman-pixman-0.46.2.tar.bz2"
 PKG_DEPENDS_HOST="toolchain:host"
 PKG_DEPENDS_TARGET="toolchain util-macros"
 PKG_LONGDESC="Pixman is a generic library for manipulating pixel regions, contains low-level pixel manipulation routines."

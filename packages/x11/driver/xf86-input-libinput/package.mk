@@ -4,10 +4,10 @@
 
 PKG_NAME="xf86-input-libinput"
 PKG_VERSION="1.5.0"
-PKG_SHA256="2524c35f196554ea11aef3bba1cf324759454e1d49f98ac026ace2f6003580e6"
+PKG_SHA256="c56db5187a75779a6d7c0429590587d2f82d479d19d4af3ac278d41b84ff6b87"
 PKG_LICENSE="MIT"
 PKG_SITE="https://www.freedesktop.org/wiki/Software/libinput/"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/driver/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/driver/xf86-input-libinput/-/archive/xf86-input-libinput-1.5.0/xf86-input-libinput-xf86-input-libinput-1.5.0.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain libinput xorg-server"
 PKG_LONGDESC="This is an X driver based on libinput."
 PKG_TOOLCHAIN="autotools"

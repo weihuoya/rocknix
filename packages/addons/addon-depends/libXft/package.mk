@@ -4,10 +4,11 @@
 
 PKG_NAME="libXft"
 PKG_VERSION="2.3.9"
-PKG_SHA256="60a25b78945ed6932635b3bb1899a517d31df7456e69867ffba27f89ff3976f5"
+PKG_SHA256="5bfc4853e99a9e22461be51315fb6809064251cf0b1a95bf195cfe89bb722356"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/libXft-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxft/-/archive/libXft-2.3.9/libxft-libXft-2.3.9.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain fontconfig freetype libXrender util-macros xorgproto"
 PKG_LONGDESC="X FreeType library."
 PKG_BUILD_FLAGS="+pic -sysroot"

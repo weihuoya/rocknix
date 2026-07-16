@@ -4,10 +4,11 @@
 
 PKG_NAME="libXt"
 PKG_VERSION="1.3.1"
-PKG_SHA256="e0a774b33324f4d4c05b199ea45050f87206586d81655f8bef4dba434d931288"
+PKG_SHA256="89dca62be7a7981dd92d1bd2ad1986c947db06a383a180244242425c1bec8555"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxt/-/archive/libXt-1.3.1/libxt-libXt-1.3.1.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11 libSM"
 PKG_LONGDESC="libXt provides the X Toolkit Intrinsics library, an abstract widget library upon which other toolkits are based."
 
