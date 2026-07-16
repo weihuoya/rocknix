@@ -4,10 +4,11 @@
 
 PKG_NAME="libSM"
 PKG_VERSION="1.2.6"
-PKG_SHA256="be7c0abdb15cbfd29ac62573c1c82e877f9d4047ad15321e7ea97d1e43d835be"
+PKG_SHA256="63a827e5804b3240a3739f2221a5d2444a6f0dc05a3974ff1fb12824e3c18e73"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.X.org"
-PKG_URL="http://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libsm/-/archive/libSM-1.2.6/libsm-libSM-1.2.6.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros util-linux libICE"
 PKG_LONGDESC="This package provides the main interface to the X11 Session Management library."
 PKG_BUILD_FLAGS="+pic"

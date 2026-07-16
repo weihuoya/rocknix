@@ -3,11 +3,11 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="libmpeg2"
-PKG_VERSION="0.5.1"
-PKG_SHA256="dee22e893cb5fc2b2b6ebd60b88478ab8556cb3b93f9a0d7ce8f3b61851871d4"
+PKG_VERSION="0.5.1-11"
+PKG_SHA256="4767e5e8f9795cb7a6aef28f9bcbd1f9affb8ac4a575bf498e63526a3b13314a"
 PKG_LICENSE="GPLv2"
-PKG_SITE="http://libmpeg2.sourceforge.net/"
-PKG_URL="http://libmpeg2.sourceforge.net/files/${PKG_NAME}-${PKG_VERSION}.tar.gz"
+PKG_SITE="https://github.com/cisco-open-source/libmpeg2"
+PKG_URL="https://github.com/cisco-open-source/libmpeg2/archive/refs/tags/vendor/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_HOST="toolchain:host"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="The MPEG Library is a collection of C routines to decode MPEG-1 and MPEG-2 movies."

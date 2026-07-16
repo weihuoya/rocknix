@@ -4,10 +4,11 @@
 
 PKG_NAME="libpciaccess"
 PKG_VERSION="0.18.1"
-PKG_SHA256="4af43444b38adb5545d0ed1c2ce46d9608cc47b31c2387fc5181656765a6fa76"
+PKG_SHA256="6faca7b27ed76547bdd44a152a04b37d9ddc8de7f17e58780e7f80fb2c0971cd"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="OSS"
 PKG_SITE="https://freedesktop.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libpciaccess/-/archive/libpciaccess-0.18.1/libpciaccess-libpciaccess-0.18.1.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros zlib"
 PKG_LONGDESC="X.org libpciaccess library."
 

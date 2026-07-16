@@ -4,10 +4,11 @@
 
 PKG_NAME="libXtst"
 PKG_VERSION="1.2.5"
-PKG_SHA256="b50d4c25b97009a744706c1039c598f4d8e64910c9fde381994e1cae235d9242"
+PKG_SHA256="ea1629bcfaf52b0e60c0fe67a4fc2a63e4ebb8b6156ff996f219bf60865e0a83"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.X.org"
-PKG_URL="http://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxtst/-/archive/libXtst-1.2.5/libxtst-libXtst-1.2.5.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libXext libXi libX11"
 PKG_LONGDESC="The Xtst Library"
 

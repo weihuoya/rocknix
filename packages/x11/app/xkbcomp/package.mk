@@ -4,10 +4,11 @@
 
 PKG_NAME="xkbcomp"
 PKG_VERSION="1.4.7"
-PKG_SHA256="0a288114e5f44e31987042c79aecff1ffad53a8154b8ec971c24a69a80f81f77"
+PKG_SHA256="619682d8254930a6b5e71b50d9547bffedb136932279ae7335370544cf1a5c29"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/app/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/app/xkbcomp/-/archive/xkbcomp-1.4.7/xkbcomp-xkbcomp-1.4.7.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11 libxkbfile"
 PKG_LONGDESC="The xkbcomp keymap compiler converts a description of an XKB keymap into one of several output formats."
 

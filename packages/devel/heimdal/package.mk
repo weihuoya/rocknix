@@ -37,4 +37,6 @@ makeinstall_host() {
   mkdir -p ${TOOLCHAIN}/bin
     cp -PR lib/asn1/asn1_compile ${TOOLCHAIN}/bin/heimdal_asn1_compile
     cp -PR lib/com_err/compile_et ${TOOLCHAIN}/bin/heimdal_compile_et
+    ln -sf ${TOOLCHAIN}/bin/heimdal_asn1_compile ${TOOLCHAIN}/bin/asn1_compile
+    ln -sf ${TOOLCHAIN}/bin/heimdal_compile_et ${TOOLCHAIN}/bin/compile_et
 }

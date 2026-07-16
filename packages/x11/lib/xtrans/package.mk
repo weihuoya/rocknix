@@ -4,10 +4,11 @@
 
 PKG_NAME="xtrans"
 PKG_VERSION="1.6.0"
-PKG_SHA256="faafea166bf2451a173d9d593352940ec6404145c5d1da5c213423ce4d359e92"
+PKG_SHA256="5586d6dee7ab1d111bd8c4c07c66e25769a6dbe7e7d45de9a7298dfff2576a35"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxtrans/-/archive/xtrans-1.6.0/libxtrans-xtrans-1.6.0.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros"
 PKG_LONGDESC="Abstract network code for X."
 PKG_BUILD_FLAGS="-cfg-libs"

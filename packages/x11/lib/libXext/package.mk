@@ -4,10 +4,11 @@
 
 PKG_NAME="libXext"
 PKG_VERSION="1.3.6"
-PKG_SHA256="edb59fa23994e405fdc5b400afdf5820ae6160b94f35e3dc3da4457a16e89753"
+PKG_SHA256="97cddd85b3af7d9243cd0f938599bdb8419999e24f6452876c5c34ff0c309daf"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxext/-/archive/libXext-1.3.6/libxext-libXext-1.3.6.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11"
 PKG_LONGDESC="LibXext provides an X Window System client interface to several extensions to the X protocol."
 

@@ -4,10 +4,11 @@
 
 PKG_NAME="libXdamage"
 PKG_VERSION="1.1.6"
-PKG_SHA256="52733c1f5262fca35f64e7d5060c6fcd81a880ba8e1e65c9621cf0727afb5d11"
+PKG_SHA256="5b99ded36f377a50ff1383ba6568cb4722c91a51a482a7f70a75f618113e9255"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxdamage/-/archive/libXdamage-1.1.6/libxdamage-libXdamage-1.1.6.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11 libXfixes"
 PKG_LONGDESC="LibXdamage provides an X Window System client interface to the DAMAGE extension to the X protocol."
 PKG_BUILD_FLAGS="+pic"

@@ -4,10 +4,10 @@
 
 PKG_NAME="libX11"
 PKG_VERSION="1.8.12"
-PKG_SHA256="fa026f9bb0124f4d6c808f9aef4057aad65e7b35d8ff43951cef0abe06bb9a9a"
+PKG_SHA256="648e4626cdb4e4c9b8842e93b46ae88df8890c24805e257ef99b78769d36f5c7"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.x.org/"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libx11/-/archive/libX11-1.8.12/libx11-libX11-1.8.12.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros xtrans libXau libxcb xorgproto"
 PKG_LONGDESC="LibX11 is the main X11 library containing all the client-side code to access the X11 windowing system."
 PKG_TOOLCHAIN="autotools"

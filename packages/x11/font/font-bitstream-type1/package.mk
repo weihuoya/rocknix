@@ -4,10 +4,11 @@
 
 PKG_NAME="font-bitstream-type1"
 PKG_VERSION="1.0.4"
-PKG_SHA256="de2f238b4cd72db4228a0ba67829d76a2b7c039e22993d66a722ee385248c628"
+PKG_SHA256="ed6c7af21d8777718415388eae56326794758c6b74cc7095085d372c7b5f3fc1"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/font/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/font/bitstream-type1/-/archive/font-bitstream-type1-1.0.4/bitstream-type1-font-bitstream-type1-1.0.4.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros font-xfree86-type1"
 PKG_LONGDESC="Bitstream font family."
 

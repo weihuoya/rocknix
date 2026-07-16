@@ -4,10 +4,11 @@
 
 PKG_NAME="libXau"
 PKG_VERSION="1.0.12"
-PKG_SHA256="74d0e4dfa3d39ad8939e99bda37f5967aba528211076828464d2777d477fc0fb"
+PKG_SHA256="67d725a29e17ecc2feeaa79acc96bde85e3f54885678952eebecc32b171e6436"
+PKG_TOOLCHAIN="meson"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxau/-/archive/libXau-1.0.12/libxau-libXau-1.0.12.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros xorgproto"
 PKG_LONGDESC="X authorization file management library"
 PKG_BUILD_FLAGS="+pic"

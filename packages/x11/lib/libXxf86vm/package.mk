@@ -4,10 +4,11 @@
 
 PKG_NAME="libXxf86vm"
 PKG_VERSION="1.1.6"
-PKG_SHA256="96af414c73ce1d5449ad04be7f9f27fa8330f844b6dda843ef22e3e1befb3ee3"
+PKG_SHA256="31a5841717d7cc70a231388f2773c44c2e402880eef06e71b9046575724c5879"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.X.org"
-PKG_URL="http://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxxf86vm/-/archive/libXxf86vm-1.1.6/libxxf86vm-libXxf86vm-1.1.6.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11 libXext"
 PKG_LONGDESC="The libxxf86vm provides an interface to the server extension XFree86-VidModeExtension."
 PKG_BUILD_FLAGS="+pic"

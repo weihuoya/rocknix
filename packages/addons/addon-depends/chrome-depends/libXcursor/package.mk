@@ -4,10 +4,11 @@
 
 PKG_NAME="libXcursor"
 PKG_VERSION="1.2.3"
-PKG_SHA256="fde9402dd4cfe79da71e2d96bb980afc5e6ff4f8a7d74c159e1966afb2b2c2c0"
+PKG_SHA256="93a752ebc5ebcd1901f7839eed264bb175b43ceb28aefd4bf26ff032f8efbdbe"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="OSS"
 PKG_SITE="http://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/libXcursor-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxcursor/-/archive/libXcursor-1.2.3/libxcursor-libXcursor-1.2.3.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain libX11 libXfixes libXrender"
 PKG_LONGDESC="X11 Cursor management library.s"
 PKG_BUILD_FLAGS="+pic -sysroot"
