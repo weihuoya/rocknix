@@ -54,7 +54,6 @@ declare -a HAS_CHEEVOS=(    arcade
                             atari7800
                             atarilynx
                             cdi
-                            colecovision
                             cps1
                             cps2
                             cps3
@@ -127,7 +126,6 @@ declare -a NO_REWIND=(  atomiswave
                         pspminis
                         saturn
                         sega32x
-                        zxspectrum
 )
 
 declare -a NO_RUNAHEAD=(    atomiswave

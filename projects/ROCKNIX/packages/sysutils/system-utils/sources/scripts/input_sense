@@ -26,10 +26,18 @@ esac
 
 ### Define matching values from evtest, but allow them to be overridden in system.cfg.
 KEY_VOLUME_UP=$(get_setting key.volume.up)
-[ -z "${KEY_VOLUME_UP}" ] && KEY_VOLUME_UP='KEY_VOLUME*UP'
-
 KEY_VOLUME_DOWN=$(get_setting key.volume.down)
-[ -z "${KEY_VOLUME_DOWN}" ] && KEY_VOLUME_DOWN='KEY_VOLUME*DOWN'
+
+### AYANEO Pocket S 2K has the physical volume +/- buttons wired to the
+### opposite inputs compared to the Android DT mapping. Swap them in
+### software so the labels match user expectations.
+if [ "${QUIRK_DEVICE}" = "AYANEO Pocket S 2K" ]; then
+  [ -z "${KEY_VOLUME_UP}" ] && KEY_VOLUME_UP='KEY_VOLUMEDOWN'
+  [ -z "${KEY_VOLUME_DOWN}" ] && KEY_VOLUME_DOWN='KEY_VOLUMEUP'
+else
+  [ -z "${KEY_VOLUME_UP}" ] && KEY_VOLUME_UP='KEY_VOLUME*UP'
+  [ -z "${KEY_VOLUME_DOWN}" ] && KEY_VOLUME_DOWN='KEY_VOLUME*DOWN'
+fi
 
 FUNCTION_VOLUME_UP_EVENT='*('${KEY_VOLUME_UP}'), value *'
 FUNCTION_VOLUME_DOWN_EVENT='*('${KEY_VOLUME_DOWN}'), value *'

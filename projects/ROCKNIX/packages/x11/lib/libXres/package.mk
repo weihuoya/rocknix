@@ -3,10 +3,11 @@
 
 PKG_NAME="libXres"
 PKG_VERSION="1.2.2"
-PKG_SHA256="9a7446f3484b9b7538ac5ee30d2c1ce9e5b7fbbaf1440e02f6cca186a1fa745f"
+PKG_SHA256="4199d98ba7947e9fb7abc1714455ec15551c75ef40a3e4cb501e1b4f345f8e30"
+PKG_TOOLCHAIN="autotools"
 PKG_LICENSE="MIT"
 PKG_SITE="https://www.X.org"
-PKG_URL="https://xorg.freedesktop.org/archive/individual/lib/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://gitlab.freedesktop.org/xorg/lib/libxres/-/archive/libXres-1.2.2/libxres-libXres-1.2.2.tar.bz2"
 PKG_DEPENDS_TARGET="toolchain util-macros libX11 libXext"
 PKG_LONGDESC="X11 library for the X Resource Extension (client resource ID listing)."
 PKG_BUILD_FLAGS="+pic"

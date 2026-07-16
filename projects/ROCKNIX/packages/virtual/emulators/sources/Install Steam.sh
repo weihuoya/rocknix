@@ -188,6 +188,18 @@ install_proton_ge() {
     "GE-Proton*-aarch64"
 }
 
+install_cjk_font_for_steam() {
+  local src="/usr/config/emulationstation/resources/DroidSansFallbackFull.ttf"
+  local dst_dir="/storage/.local/share/fonts"
+  if [ -f "${src}" ]; then
+    log_info "Installing CJK font for Steam..."
+    mkdir -p "${dst_dir}"
+    cp -f "${src}" "${dst_dir}/" || log_info "Failed to copy CJK font, continuing anyway."
+  else
+    log_info "CJK font not found in EmulationStation resources, skipping."
+  fi
+}
+
 run_steam_first_launch() {
   log_info "Running Steam first launch routine..."
   echo 0 > /proc/sys/fs/binfmt_misc/x86_64 || true
@@ -221,6 +233,7 @@ install_steam_client_arm64
 install_bundled_proton_files
 install_proton_cachyos
 install_proton_ge
+install_cjk_font_for_steam
 run_steam_first_launch
 
 echo ""

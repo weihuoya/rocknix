@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: ROCKNIX <rocknix@rocknix.org>
+Date: Mon, 9 Jun 2025 21:18:48 +0800
+Subject: [PATCH] fix missing sys/stat.h include in device-info.c
+
+This fixes compile error with newer glibc/gcc where stat() and S_ISBLK
+are no longer implicitly declared.
+
+ src/device-info.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/device-info.c b/src/device-info.c
+--- a/src/device-info.c
++++ b/src/device-info.c
+@@ -1,5 +1,6 @@
+ #include "device-info.h"
+ 
++#include <sys/stat.h>
+ static char *
+ _dupv8 (const char *s)
+ {

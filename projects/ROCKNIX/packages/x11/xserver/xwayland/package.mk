@@ -2,13 +2,13 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="xwayland"
-PKG_VERSION="449b197e7e652cb145a25b3b795d3363445d3975"
+PKG_VERSION="24.1.9"
 PKG_LICENSE="OSS"
 PKG_SITE="https://gitlab.freedesktop.org/xorg/xserver"
-PKG_URL="${PKG_SITE}.git"
-PKG_GIT_CLONE_BRANCH="xwayland-24.1"
+PKG_URL="https://gitlab.freedesktop.org/xorg/xserver/-/archive/xwayland-24.1.9/xserver-xwayland-24.1.9.tar.bz2"
+PKG_SHA256="cd03b324e3abb689d20ddc6ebecd72ff7dea5c565d56f3e50c415db130520e7f"
 PKG_DEPENDS_TARGET="toolchain util-macros font-util xorgproto libpciaccess libX11 libXfont2 libXinerama libxcvt libxshmfence libxkbfile libdrm openssl freetype pixman systemd xorg-launch-helper wayland libglvnd"
-PKG_NEED_UNPACK="$(get_pkg_directory xf86-video-nvidia) $(get_pkg_directory xf86-video-nvidia-legacy)"
+PKG_NEED_UNPACK=""
 PKG_LONGDESC="X.Org Server is the free and open-source implementation of the X Window System display server."
 
 get_graphicdrivers
