@@ -1,0 +1,104 @@
+diff -Nur a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+--- a/compiler/rustc_target/src/spec/mod.rs	2026-06-18 09:43:11.957736033 +0800
++++ b/compiler/rustc_target/src/spec/mod.rs	2026-06-18 09:43:11.958793619 +0800
+@@ -1443,6 +1443,7 @@
+ }
+ 
+ supported_targets! {
++    ("x86_64-rocknix-linux-gnu", x86_64_rocknix_linux_gnu),
+     ("x86_64-unknown-linux-gnu", x86_64_unknown_linux_gnu),
+     ("x86_64-unknown-linux-gnux32", x86_64_unknown_linux_gnux32),
+     ("i686-unknown-linux-gnu", i686_unknown_linux_gnu),
+@@ -1490,6 +1491,7 @@
+     ("thumbv7neon-unknown-linux-musleabihf", thumbv7neon_unknown_linux_musleabihf),
+     ("armv7-unknown-linux-musleabi", armv7_unknown_linux_musleabi),
+     ("armv7-unknown-linux-musleabihf", armv7_unknown_linux_musleabihf),
++    ("aarch64-rocknix-linux-gnu", aarch64_rocknix_linux_gnu),
+     ("aarch64-unknown-linux-gnu", aarch64_unknown_linux_gnu),
+     ("aarch64-unknown-linux-musl", aarch64_unknown_linux_musl),
+     ("aarch64_be-unknown-linux-musl", aarch64_be_unknown_linux_musl),
+diff -Nur a/compiler/rustc_target/src/spec/targets/aarch64_rocknix_linux_gnu.rs b/compiler/rustc_target/src/spec/targets/aarch64_rocknix_linux_gnu.rs
+--- a/compiler/rustc_target/src/spec/targets/aarch64_rocknix_linux_gnu.rs	1970-01-01 08:00:00.000000000 +0800
++++ b/compiler/rustc_target/src/spec/targets/aarch64_rocknix_linux_gnu.rs	2026-06-18 09:43:11.959369657 +0800
+@@ -0,0 +1,39 @@
++use crate::spec::{
++    Arch, FramePointer, SanitizerSet, StackProbeType, Target, TargetMetadata, TargetOptions, base,
++};
++
++pub(crate) fn target() -> Target {
++    Target {
++        llvm_target: "aarch64-unknown-linux-gnu".into(),
++        metadata: TargetMetadata {
++            description: Some("ARM64 Linux for ROCKNIX (kernel 4.1, glibc 2.17+)".into()),
++            tier: Some(3),
++            host_tools: Some(false),
++            std: Some(true),
++        },
++        pointer_width: 64,
++        data_layout: "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32".into(),
++        arch: Arch::AArch64,
++        options: TargetOptions {
++            features: "+v8a,+outline-atomics".into(),
++            // the AAPCS64 expects use of non-leaf frame pointers per
++            // https://github.com/ARM-software/abi-aa/blob/4492d1570eb70c8fd146623e0db65b2d241f12e7/aapcs64/aapcs64.rst#the-frame-pointer
++            // and we tend to encounter interesting bugs in AArch64 unwinding code if we do not
++            frame_pointer: FramePointer::NonLeaf,
++            mcount: "\u{1}_mcount".into(),
++            max_atomic_width: Some(128),
++            stack_probes: StackProbeType::Inline,
++            supported_sanitizers: SanitizerSet::ADDRESS
++                | SanitizerSet::CFI
++                | SanitizerSet::KCFI
++                | SanitizerSet::LEAK
++                | SanitizerSet::MEMORY
++                | SanitizerSet::MEMTAG
++                | SanitizerSet::THREAD
++                | SanitizerSet::HWADDRESS
++                | SanitizerSet::REALTIME,
++            supports_xray: true,
++            ..base::linux_gnu::opts()
++        },
++    }
++}
+diff -Nur a/compiler/rustc_target/src/spec/targets/x86_64_rocknix_linux_gnu.rs b/compiler/rustc_target/src/spec/targets/x86_64_rocknix_linux_gnu.rs
+--- a/compiler/rustc_target/src/spec/targets/x86_64_rocknix_linux_gnu.rs	1970-01-01 08:00:00.000000000 +0800
++++ b/compiler/rustc_target/src/spec/targets/x86_64_rocknix_linux_gnu.rs	2026-06-18 09:43:11.960369757 +0800
+@@ -0,0 +1,38 @@
++use crate::spec::{
++    Arch, Cc, LinkerFlavor, Lld, SanitizerSet, StackProbeType, Target, TargetMetadata, base,
++};
++
++pub(crate) fn target() -> Target {
++    let mut base = base::linux_gnu::opts();
++    base.cpu = "x86-64".into();
++    base.plt_by_default = false;
++    base.max_atomic_width = Some(64);
++    base.add_pre_link_args(LinkerFlavor::Gnu(Cc::Yes, Lld::No), &["-m64"]);
++    base.stack_probes = StackProbeType::Inline;
++    base.static_position_independent_executables = true;
++    base.supported_sanitizers = SanitizerSet::ADDRESS
++        | SanitizerSet::CFI
++        | SanitizerSet::KCFI
++        | SanitizerSet::DATAFLOW
++        | SanitizerSet::LEAK
++        | SanitizerSet::MEMORY
++        | SanitizerSet::SAFESTACK
++        | SanitizerSet::THREAD
++        | SanitizerSet::REALTIME;
++    base.supports_xray = true;
++
++    Target {
++        llvm_target: "x86_64-unknown-linux-gnu".into(),
++        metadata: TargetMetadata {
++            description: Some("64-bit Linux for ROCKNIX (kernel 3.2+, glibc 2.17+)".into()),
++            tier: Some(3),
++            host_tools: Some(false),
++            std: Some(true),
++        },
++        pointer_width: 64,
++        data_layout:
++            "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128".into(),
++        arch: Arch::X86_64,
++        options: base,
++    }
++}
