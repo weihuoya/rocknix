@@ -16,6 +16,9 @@ on:
 jobs:
   build-aarch64-emu-standalone:
     runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
     env:
       EMULATION_DEVICE: no
       ENABLE_32BIT: no
@@ -24,7 +27,6 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       ARCH: aarch64
-      CACHE_KEY: ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone-${{ github.sha }}
       DISABLE_COLORS: yes
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: 1
@@ -34,69 +36,76 @@ jobs:
       - name: Maximize build space
         uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
-          skip-components: docker-engine
+          skip-components: docker-engine,gh-cli
 
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Retrieve ccache
+      - name: Compute emu-standalone key
+        id: emu_standalone_key
         run: |
-          BASE="https://github.com/${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}/releases/download/ccache"
-          PREFIX="ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone.tar.part-"
-          found_any=0
-          for suffix in $(printf "%s\n" {a..z}{a..z}); do
-            FILE="${PREFIX}${suffix}"
-            URL="${BASE}/${FILE}"
-          
-            echo "Trying $URL"
-            if curl -L --fail --silent --show-error -o "$FILE" "$URL"; then
-              echo "Downloaded $FILE"
-              found_any=1
-            else
-              echo "No more parts found at $URL"
-              break
-            fi
-          done
-          if [ "$found_any" -eq 0 ]; then
-            echo "No cache found, skipping."
-            exit 0
+          KEY=$(find projects/ROCKNIX/packages/virtual/emulators projects/ROCKNIX/packages/emulators -type f | sort | xargs cat | sha256sum | cut -d' ' -f1 | cut -c1-16)
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Retrieve prebuilt emu-standalone
+        id: emu_standalone_hit
+        run: |
+          ASSET="emu-standalone-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_standalone_key.outputs.key }}.tar.zst"
+          PART_A="${ASSET}.aa"
+          PART_B="${ASSET}.ab"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/emu-standalone-aarch64-${{ inputs.DEVICE }}"
+          if curl -L --fail --silent --show-error "${URL_BASE}/${PART_A}" -o "${PART_A}" && \
+             curl -L --fail --silent --show-error "${URL_BASE}/${PART_B}" -o "${PART_B}"; then
+            cat "${PART_A}" "${PART_B}" > "${ASSET}"
+            rm -f "${PART_A}" "${PART_B}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+            echo "hit=true" >> $GITHUB_OUTPUT
+            echo "Prebuilt emu-standalone downloaded and extracted."
+          else
+            rm -f "${PART_A}" "${PART_B}" "${ASSET}"
+            echo "hit=false" >> $GITHUB_OUTPUT
+            echo "Prebuilt emu-standalone not found, will build from source."
           fi
-          cat ${PREFIX}* > ccache.tar
-          tar -xf ccache.tar || { echo "Extract failed"; exit 0; }
-          rm -f ${PREFIX}* ccache.tar
+
+      - name: Restore ccache
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone-
 
       - name: Download aarch64 (${{ inputs.DEVICE }})
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: aarch64 (${{ inputs.DEVICE }})
 
       - name: Extract artifact aarch64
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            tar -xf build.aarch64.tar
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed aarch64 file
-        run: rm build.aarch64.tar
-
-      - name: Download build aarch64 (${{ inputs.DEVICE }})
-        uses: actions/download-artifact@v8
-        with:
-          name: aarch64 build (${{ inputs.DEVICE }})
-
-      - name: Extract artifact aarch64 build
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            tar -xf build.build.aarch64.tar
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed aarch64 file
-        run: rm build.build.aarch64.tar
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < aarch64-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Download aarch64-rust (${{ inputs.DEVICE }})
         uses: actions/download-artifact@v8
@@ -105,41 +114,77 @@ jobs:
 
       - name: Extract artifact aarch64-rust
         run: |
-          tar --zstd -xf build.aarch64-rust.tar.zst
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/rust-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < rust-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Clean up compressed aarch64-rust file
-        run: rm build.aarch64-rust.tar.zst
+        run: rm -f rust-aarch64-*.tar.zst
+
 
       - name: Download qt6 (${{ inputs.DEVICE }})
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' ||
-          inputs.DEVICE == 'S922X'  || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' || inputs.DEVICE == 'SM8650' || inputs.DEVICE == 'SM8750' || inputs.DEVICE == 'SM6115' }}
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: qt6 (${{ inputs.DEVICE }})
 
       - name: Extract artifact qt6
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' ||
-          inputs.DEVICE == 'S922X'  || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' || inputs.DEVICE == 'SM8650' || inputs.DEVICE == 'SM8750' || inputs.DEVICE == 'SM6115' }}
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
         run: |
-          sudo tar --zstd -xf build.qt6.tar.zst --same-owner
-
-      - name: Clean up compressed qt6 file
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' ||
-          inputs.DEVICE == 'S922X'  || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' || inputs.DEVICE == 'SM8650' || inputs.DEVICE == 'SM6115' }}
-        run: rm build.qt6.tar.zst
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/qt6-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < qt6-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Build
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            ./scripts/get_env > .env
-            set -e
-            { docker run --init --env-file .env -e USER=docker --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-              bash -c "./scripts/build_mt emulators"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
-            exit_code=$(<docker_exit_code)
-            exit $exit_code
-          max_attempts: 6
-          retry_interval: 10
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
+        run: |
+          ./scripts/get_env > .env
+          # Heartbeat: keep GitHub from killing us during long silent builds
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env -e USER=docker --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+            bash -c "./scripts/build_mt emulators"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
 
       - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-emu-standalone)
         if: failure()
@@ -151,43 +196,66 @@ jobs:
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
 
       - name: Clean ccache
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
         run: |
           export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -M 4.5G
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -c
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -z
-
-      - name: Tar ccache
-        run: |
-          tar --remove-files -cf - ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache \
-            | split -b 1900m - ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone.tar.part-
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 6G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
 
       - name: Save ccache
-        uses: softprops/action-gh-release@v3 
+        if: always() && steps.emu_standalone_hit.outputs.hit != 'true'
+        uses: actions/cache/save@v5
         with:
-          tag_name: ccache
-          files: "ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone.tar.part-*"
-          make_latest: true
-          prerelease: true
-          body: ccache
-          token: ${{ secrets.GH_PAT }}
-          repository: ${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}
-        continue-on-error: true
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Print space
         run: df -h
 
       - name: Compress directory
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
         run: |
-          sudo tar --remove-files -cf - \
+          tar --zstd -cf build.emu-standalone.tar.zst \
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/install_* \
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.stamps \
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain  | split -b 2G -  build.emu-standalone.tar.part
+          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain
 
+      - name: Upload cache key
+        run: |
+          ASSET="emu-standalone-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_standalone_key.outputs.key }}.tar.zst"
+          echo "${ASSET}.aa" > emu-standalone-key.txt
+          echo "${ASSET}.ab" >> emu-standalone-key.txt
       - uses: actions/upload-artifact@v7
         with:
           name: emu-standalone (${{ inputs.DEVICE }})
-          path: build.emu-standalone.tar.part*
+          path: emu-standalone-key.txt
           if-no-files-found: error
+
+      - name: Upload prebuilt emu-standalone
+        if: steps.emu_standalone_hit.outputs.hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          ASSET="emu-standalone-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_standalone_key.outputs.key }}.tar.zst"
+          mv build.emu-standalone.tar.zst "${ASSET}"
+          split -n 2 "${ASSET}" "${ASSET}."
+          rm -f "${ASSET}"
+          gh release create "emu-standalone-aarch64-${{ inputs.DEVICE }}" --title "Emu-standalone cache for ${{ inputs.DEVICE }}" --notes "Auto-generated emu-standalone cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "emu-standalone-aarch64-${{ inputs.DEVICE }}" "${ASSET}.aa" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.aa, continuing..."
+          gh release upload "emu-standalone-aarch64-${{ inputs.DEVICE }}" "${ASSET}.ab" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}.ab, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always() && steps.emu_standalone_hit.outputs.hit != 'true'
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
