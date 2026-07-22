@@ -1,0 +1,202 @@
+name: Build ashell for ROCKNIX SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      ashell_repo:
+        description: 'ashell repository to build'
+        required: true
+        default: 'weihuoya/ashell'
+      ashell_ref:
+        description: 'ashell branch/tag/commit'
+        required: true
+        default: 'main'
+
+jobs:
+  build-aarch64-toolchain:
+    permissions:
+      actions: write
+      contents: write
+    uses: ./.github/workflows/build-aarch64-toolchain.yml
+    secrets: inherit
+    with:
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      OWNER_LC: rocknix
+
+  build-aarch64-rust:
+    permissions:
+      actions: write
+      contents: write
+    uses: ./.github/workflows/build-aarch64-rust.yml
+    needs: build-aarch64-toolchain
+    secrets: inherit
+    with:
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      OWNER_LC: rocknix
+
+  build-aarch64-ashell-deps:
+    permissions:
+      actions: write
+      contents: write
+    uses: ./.github/workflows/build-aarch64-ashell-deps.yml
+    needs: build-aarch64-rust
+    secrets: inherit
+    with:
+      DEVICE: SM8550
+      skip_toolchain: true
+
+  build-aarch64-ashell:
+    runs-on: ubuntu-24.04
+    needs: build-aarch64-ashell-deps
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      SCCACHE_VERSION: v0.10.0
+      SCCACHE_DIR: /work/rocknix/.sccache-cache
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Checkout ashell
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.inputs.ashell_repo }}
+          ref: ${{ github.event.inputs.ashell_ref }}
+          path: ashell
+          fetch-depth: 1
+
+      - name: Compute rust cache key
+        id: keys
+        run: |
+          RUST_KEY=$(find packages/rust/ projects/ROCKNIX/packages/rust/ -type f | sort | xargs cat | sha256sum | cut -d' ' -f1 | cut -c1-16)
+          echo "rust_key=$RUST_KEY" >> $GITHUB_OUTPUT
+
+      - name: Download aarch64-toolchain key
+        uses: actions/download-artifact@v8
+        with:
+          name: aarch64-toolchain (${{ env.DEVICE }})
+
+      - name: Download and extract aarch64-toolchain
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-${{ env.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < toolchain-key.txt
+          ASSET="${PARTS[0]%.aa}"
+          cat "${PARTS[@]}" > "${ASSET}"
+          rm -f "${PARTS[@]}" toolchain-key.txt
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download aarch64-ashell-deps key
+        uses: actions/download-artifact@v8
+        with:
+          name: aarch64-ashell-deps (${{ env.DEVICE }})
+
+      - name: Download and extract ashell-deps cache
+        run: |
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/ashell-aarch64-${{ env.DEVICE }}"
+          ASSET=$(cat ashell-deps-key.txt)
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}" ashell-deps-key.txt
+
+      - name: Download aarch64-rust key
+        uses: actions/download-artifact@v8
+        with:
+          name: aarch64-rust (${{ env.DEVICE }})
+
+      - name: Download and extract prebuilt rust
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/rust-aarch64-${{ env.DEVICE }}"
+          ASSET=$(cat rust-key.txt)
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}" rust-key.txt
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+        with:
+          version: ${{ env.SCCACHE_VERSION }}
+
+      - name: Copy sccache to workspace
+        run: |
+          mkdir -p .sccache
+          cp "${SCCACHE_PATH}" .sccache/sccache
+          chmod +x .sccache/sccache
+          ./.sccache/sccache --version
+
+      - name: Build ashell
+        run: |
+          ./scripts/get_env > .env
+          echo 'ASHELL_SOURCE_DIR=/work/ashell' >> .env
+          echo 'RUSTC_WRAPPER=/work/rocknix/.sccache/sccache' >> .env
+          echo 'SCCACHE_DIR=${{ env.SCCACHE_DIR }}' >> .env
+          echo 'SCCACHE_GHA_ENABLED=true' >> .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -v ${PWD}/ashell:/work/ashell -v ${PWD}/.sccache:/work/rocknix/.sccache -v ${PWD}/.sccache-cache:/work/rocknix/.sccache-cache -w /work/rocknix -e PWD=/work/rocknix -e SCCACHE_GHA_ENABLED -e ACTIONS_CACHE_URL -e ACTIONS_RUNTIME_TOKEN "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build ashell:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-ashell)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Show sccache stats
+        if: always()
+        run: |
+          export SCCACHE_DIR="${PWD}/.sccache-cache"
+          ./.sccache/sccache --show-stats || true
+
+      - name: Package ashell
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          ASHELL_VERSION="$(cd ashell && git describe --tags --always 2>/dev/null || echo ${VERSION})"
+          STAGE="ashell-${ASHELL_VERSION}-rocknix-sm8550"
+          mkdir -p "${STAGE}"
+          ASHELL_BIN=$(find "build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg" -name ashell -type f | head -n1)
+          cp "${ASHELL_BIN}" "${STAGE}/"
+          tar -czf "${STAGE}.tar.gz" "${STAGE}"
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASHELL_VERSION="$(cd ashell && git describe --tags --always 2>/dev/null || echo dev)"
+          RELEASE_TAG="ashell-${ASHELL_VERSION}-rocknix-sm8550"
+          gh release create "ashell-aarch64-${{ env.DEVICE }}" --title "ashell for ${{ env.DEVICE }}" --notes "Cross-compiled ashell and dependency cache for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "ashell-aarch64-${{ env.DEVICE }}" "${{ env.ASSET }}" --clobber

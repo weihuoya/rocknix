@@ -87,13 +87,13 @@
   SFTP_SERVER="yes"
 
 # build and install Simple HTTP Server (yes / no)
-  SIMPLE_HTTP_SERVER="yes"
+  SIMPLE_HTTP_SERVER="no"
 
 # build and install OpenVPN support (yes / no)
   OPENVPN_SUPPORT="no"
 
 # build and install ZeroTier support (yes / no)
-  ZEROTIER_SUPPORT="yes"
+  ZEROTIER_SUPPORT="no"
 
 # build and install WireGuard support (yes / no)
   WIREGUARD_SUPPORT="yes"
@@ -107,7 +107,7 @@
   EXFAT="yes"
 
 # build and install NTFS-3G fuse support (yes / no)
-  NTFS3G="yes"
+  NTFS3G="no"
 
 # build and install hfs filesystem utilities (yes / no)
   HFSTOOLS="no"
@@ -183,7 +183,7 @@
   BTOP_TOOL="yes"
 
 # Distribution Specific source location
-  DISTRO_MIRROR="https://github.com/ROCKNIX/distribution-sources/releases/download/sources"
+  DISTRO_MIRROR="https://github.com/weihuoya/rocknix/releases/download/sources"
   DISTRO_SRC="https://sources.libreelec.tv/$DISTRO_VERSION"
 
 # Default size of system partition, in MB, eg. 512
