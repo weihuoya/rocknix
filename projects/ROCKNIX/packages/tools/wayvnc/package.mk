@@ -26,7 +26,7 @@ unpack() {
   fi
 }
 
-PKG_MESON_OPTS_TARGET="-Dscreencopy-dmabuf=disabled \
+PKG_MESON_OPTS_TARGET="-Dscreencopy-dmabuf=enabled \
                        -Dpam=disabled \
                        -Dman-pages=disabled \
                        -Dtests=false"

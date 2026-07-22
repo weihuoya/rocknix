@@ -57,25 +57,13 @@ jobs:
           tar --zstd -xf "${ASSET}"
           rm -f "${ASSET}"
 
-      - name: Build wayvnc dependencies
+      - name: Download and extract wayvnc-deps
         run: |
-          ./scripts/get_env > .env
-          echo 'WAYVNC_SOURCE_DIR=/work/wayvnc' >> .env
-          (
-            while true; do
-              sleep 300
-              ELAPSED_MIN=$((SECONDS / 60))
-              ELAPSED_SEC=$((SECONDS % 60))
-              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
-            done
-          ) &
-          HEARTBEAT_PID=$!
-          set -e
-          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -v ${PWD}/wayvnc:/work/wayvnc -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
-            bash -c "./scripts/build mesa:target && ./scripts/build ffmpeg:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
-          kill $HEARTBEAT_PID 2>/dev/null || true
-          exit_code=$(<docker_exit_code)
-          exit $exit_code
+          ASSET="wayvnc-deps-aarch64-${{ env.DEVICE }}.tar.zst"
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/wayvnc-aarch64-${{ env.DEVICE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
 
       - name: Build wayvnc
         run: |
