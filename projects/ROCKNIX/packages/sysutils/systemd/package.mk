@@ -107,6 +107,7 @@ then
 fi
 
 pre_configure_target() {
+  export PYTHONPATH="${TOOLCHAIN}/lib/python3.13/site-packages:${PYTHONPATH}"
   export TARGET_CFLAGS=$(echo ${TARGET_CFLAGS} | sed -e "s|-O.|-O3|g")
 
   export TARGET_LDFLAGS=$(echo ${TARGET_LDFLAGS} | sed -e "s|-O.|-O3|g")
