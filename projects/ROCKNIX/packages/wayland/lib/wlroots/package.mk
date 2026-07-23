@@ -22,8 +22,8 @@ case ${DEVICE} in
     PKG_URL="https://github.com/rocknix/rockchip-wlroots/archive/refs/tags/${PKG_VERSION}.tar.gz"
     ;;
   *)
-    PKG_VERSION="0.19.3"
-    PKG_SHA256="a6ff89b64ea15e424d1b0db4a22145fccf5ec2ff2e7b8af0fa35e2ac8975986f"
+    PKG_VERSION="0.20.2"
+    PKG_SHA256="972c7ac44b17828f4702bfae7cd8347346a3fb5b2c1076cfa2c3fcedac5ec343"
     PKG_URL="${PKG_SITE}/-/archive/${PKG_VERSION}/wlroots-${PKG_VERSION}.tar.gz"
     ;;
 esac
@@ -31,15 +31,17 @@ esac
 
 configure_package() {
   # OpenGLES Support
-  if [ "${OPENGLES_SUPPORT}" = "yes" ]; then
-    PKG_DEPENDS_TARGET+=" ${OPENGLES}"
-  fi
+  PKG_DEPENDS_TARGET+=" ${OPENGLES}"
+
+  # Vulkan Support
+  PKG_DEPENDS_TARGET+=" ${VULKAN} vulkan-headers glslang:host"
 }
+
 # to enable xwayland package: https://gitlab.freedesktop.org/xorg/lib/libxcb-wm/-/tree/master/icccm?ref_type=heads
 PKG_MESON_OPTS_TARGET="-Dxcb-errors=disabled \
                        -Dxwayland=enabled \
                        -Dexamples=false \
-                       -Drenderers=gles2 \
+                       -Drenderers=gles2,vulkan \
                        -Dbackends=drm,libinput"
 
 unpack() {

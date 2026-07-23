@@ -8,7 +8,7 @@ PKG_LICENSE="LGPL"
 PKG_SITE="https://www.gtk.org/"
 PKG_URL="https://gitlab.gnome.org/GNOME/gtk/-/archive/${PKG_VERSION}/gtk-${PKG_VERSION}.tar.bz2"
 PKG_SOURCE_DIR="gtk-${PKG_VERSION}"
-PKG_DEPENDS_TARGET="toolchain at-spi2-core cairo gdk-pixbuf glib gobject-introspection graphene gstreamer gst-plugins-base libepoxy pango libxkbcommon wayland wayland-protocols vulkan-loader vulkan-headers"
+PKG_DEPENDS_TARGET="toolchain at-spi2-core cairo gdk-pixbuf glib graphene gstreamer gst-plugins-base libepoxy pango libxkbcommon wayland wayland-protocols vulkan-loader vulkan-headers"
 PKG_DEPENDS_CONFIG="cairo pango gdk-pixbuf shared-mime-info"
 PKG_LONGDESC="GTK 4 toolkit for creating graphical user interfaces."
 PKG_BUILD_FLAGS="-sysroot"
@@ -30,7 +30,7 @@ PKG_MESON_OPTS_TARGET="-Dwayland-backend=true \
                        -Df16c=auto \
                        -Daccesskit=disabled \
                        -Dandroid-runtime=disabled \
-                       -Dintrospection=enabled \
+                       -Dintrospection=disabled \
                        -Ddocumentation=false \
                        -Dman-pages=false \
                        -Dbuild-demos=false \

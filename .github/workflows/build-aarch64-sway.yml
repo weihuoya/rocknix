@@ -1,0 +1,143 @@
+name: Build sway for ROCKNIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: 'ROCKNIX device to build for'
+        required: false
+        type: string
+        default: 'SM8550'
+  workflow_call:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+  push:
+    branches: [main]
+    paths:
+      - 'projects/ROCKNIX/packages/wayland/compositor/sway/**'
+      - 'projects/ROCKNIX/packages/wayland/lib/wlroots/**'
+      - 'packages/wayland/**'
+      - 'projects/ROCKNIX/packages/wayland/**'
+      - 'packages/graphics/**'
+      - 'projects/ROCKNIX/packages/graphics/**'
+      - 'packages/x11/**'
+      - 'projects/ROCKNIX/packages/x11/**'
+      - '.github/workflows/build-aarch64-sway.yml'
+
+jobs:
+  build-aarch64-sway:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-sway-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-sway-
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-2718568bd983a54f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Build sway
+        run: |
+          ./scripts/get_env > .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build sway:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-sway)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-sway-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Package sway
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          SWAY_VERSION="$(grep -E '^PKG_VERSION=' projects/ROCKNIX/packages/wayland/compositor/sway/package.mk | cut -d'"' -f2)"
+          STAGE="sway-${SWAY_VERSION}-${VERSION}-rocknix-${{ env.DEVICE }}"
+          mkdir -p "${STAGE}"
+          for pkgdir in build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/*; do
+            [ -d "${pkgdir}" ] || continue
+            cp -a "${pkgdir}/." "${STAGE}/"
+          done
+          tar -czf "${STAGE}.tar.gz" -C "${STAGE}" .
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload sway to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="sway-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --title "sway for ${{ env.DEVICE }}" --notes "Cross-compiled sway and dependencies for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber
