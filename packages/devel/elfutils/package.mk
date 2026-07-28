@@ -27,6 +27,7 @@ PKG_CONFIGURE_OPTS_HOST="utrace_cv_cc_biarch=false \
                          --disable-nls \
                          --disable-debuginfod \
                          --disable-libdebuginfod \
+                         --disable-demangler \
                          --with-zlib \
                          --without-bzlib \
                          --without-lzma"
@@ -36,6 +37,7 @@ PKG_CONFIGURE_OPTS_TARGET="utrace_cv_cc_biarch=false \
                            --disable-nls \
                            --disable-debuginfod \
                            --disable-libdebuginfod \
+                           --disable-demangler \
                            --with-zlib \
                            --without-bzlib \
                            --without-lzma"
