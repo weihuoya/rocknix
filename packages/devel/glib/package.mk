@@ -9,7 +9,7 @@ PKG_LICENSE="LGPL"
 PKG_SITE="https://www.gtk.org/"
 PKG_URL="https://download.gnome.org/sources/glib/$(get_pkg_version_maj_min)/${PKG_NAME}-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_HOST="libffi:host pcre2:host Python3:host meson:host ninja:host"
-PKG_DEPENDS_TARGET="meson:host ninja:host gcc:host glib:host gobject-introspection:host libffi pcre2 Python3:host util-linux zlib"
+PKG_DEPENDS_TARGET="meson:host ninja:host gcc:host glib:host libffi pcre2 Python3:host util-linux zlib"
 PKG_LONGDESC="A library which includes support routines for C such as lists, trees, hashes, memory allocation."
 
 PKG_MESON_OPTS_HOST="-Ddefault_library=static \
@@ -29,22 +29,14 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dbsymbolic_functions=true \
                        -Dforce_posix_threads=true \
                        -Dtests=false \
-                       -Dintrospection=enabled"
+                       -Dintrospection=disabled"
 
 post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/bin
   rm -rf ${INSTALL}/usr/lib/gdbus-2.0
   rm -rf ${INSTALL}/usr/lib/glib-2.0
   rm -rf ${INSTALL}/usr/lib/installed-tests
-
-  # Keep /usr/share/gir-1.0 for introspection data; remove everything else
-  if [ -d "${INSTALL}/usr/share" ]; then
-    for dir in ${INSTALL}/usr/share/*; do
-      [ -d "${dir}" ] || continue
-      [ "$(basename "${dir}")" = "gir-1.0" ] && continue
-      rm -rf "${dir}"
-    done
-  fi
+  rm -rf ${INSTALL}/usr/share
 
   # glib binaries must be executed from toolchain
   sed -e "s#bindir=\${prefix}/bin#bindir=${TOOLCHAIN}/bin#" -i "${SYSROOT_PREFIX}/usr/lib/pkgconfig/"{gio,glib}-2.0.pc
