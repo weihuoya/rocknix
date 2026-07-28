@@ -65,8 +65,12 @@ jobs:
           ) &
           HEARTBEAT_PID=$!
           set -e
-          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
-            bash -c "sudo apt-get update >/dev/null && sudo apt-get install -y --no-install-recommends dwarves >/dev/null && unset DEVICE_ROOT && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build linux"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          { docker run --init --env-file .env --rm --user root -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "trap 'chown -R $(id -u):$(id -g) /work/rocknix' EXIT; \
+              chown -R docker:docker /work/rocknix; \
+              apt-get update >/dev/null; \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends apt-utils dwarves >/dev/null; \
+              su -s /bin/bash docker -c \"cd /work/rocknix && set -a && . ./.env && set +a && unset DEVICE_ROOT && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build linux\""; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
           kill $HEARTBEAT_PID 2>/dev/null || true
           exit_code=$(<docker_exit_code)
           exit $exit_code
