@@ -24,7 +24,7 @@ RUN apt-get update \
       unzip diffutils lzop make file g++-12 xfonts-utils xsltproc default-jre-headless python3 \
       libc6-dev libncurses5-dev libjson-perl libxml-parser-perl libparse-yapp-perl rdfind \
       golang-1.23-go git openssh-client rsync upx-ucl \
-      python-is-python3 python3 parted wget xxd automake xmlstarlet rsync \
+      python-is-python3 python3 parted wget xxd automake xmlstarlet rsync dwarves \
     --no-install-recommends \
     && ln -s /usr/lib/go-1.23 /usr/lib/go \
     && ln -s /usr/lib/go-1.23/bin/go /usr/bin/go \

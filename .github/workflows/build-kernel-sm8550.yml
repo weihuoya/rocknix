@@ -1,0 +1,161 @@
+name: Build kernel for SM8550
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  build-kernel-sm8550:
+    runs-on: ubuntu-24.04
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-SM8550.aarch64/.ccache
+          key: ccache-aarch64-SM8550-kernel-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-SM8550-kernel-
+            ccache-aarch64-SM8550-base-
+            ccache-aarch64-SM8550-toolchain-
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-2718568bd983a54f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Build kernel
+        run: |
+          ./scripts/get_env > .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "sudo apt-get update >/dev/null && sudo apt-get install -y --no-install-recommends dwarves >/dev/null && unset DEVICE_ROOT && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build linux"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs-SM8550-kernel
+          path: |
+            output.log
+            ./build.ROCKNIX-SM8550.aarch64/.threads/logs/
+
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-SM8550.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-SM8550.aarch64/.ccache
+          key: ccache-aarch64-SM8550-kernel-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Collect kernel artifacts
+        run: |
+          set -e
+          BUILD_DIR="build.ROCKNIX-SM8550.aarch64"
+          LINUX_INSTALL=$(find "${BUILD_DIR}/install_pkg" -maxdepth 1 -type d -name 'linux-*' | head -1)
+          if [ -z "${LINUX_INSTALL}" ] || [ ! -d "${LINUX_INSTALL}" ]; then
+            echo "ERROR: linux install dir not found under ${BUILD_DIR}/install_pkg"
+            find "${BUILD_DIR}/install_pkg" -maxdepth 2 -type d || true
+            exit 1
+          fi
+          KERNEL_VERSION=$(basename "${LINUX_INSTALL}" | sed 's/^linux-//')
+          echo "LINUX_INSTALL=${LINUX_INSTALL}"
+          echo "KERNEL_VERSION=${KERNEL_VERSION}"
+          echo "KERNEL_VERSION=${KERNEL_VERSION}" >> "$GITHUB_ENV"
+          mkdir -p kernel-artifacts
+
+          # Kernel image and meta
+          cp -v "${LINUX_INSTALL}/.image/Image" kernel-artifacts/KERNEL
+          cp -v "${LINUX_INSTALL}/.image/System.map" kernel-artifacts/
+          cp -v "${LINUX_INSTALL}/.image/.config" kernel-artifacts/kernel.config
+          cp -v "${LINUX_INSTALL}/.image/Module.symvers" kernel-artifacts/ 2>/dev/null || true
+
+          # DTBs
+          mkdir -p kernel-artifacts/dtbs
+          if [ -d "${LINUX_INSTALL}/usr/share/bootloader/boot" ]; then
+            cp -v "${LINUX_INSTALL}/usr/share/bootloader/boot"/*.dtb kernel-artifacts/dtbs/ 2>/dev/null || true
+          fi
+          cp -v "${LINUX_INSTALL}/usr/share/bootloader"/*.dtb kernel-artifacts/dtbs/ 2>/dev/null || true
+          if [ -d "${LINUX_INSTALL}/usr/share/bootloader/overlays" ]; then
+            cp -a "${LINUX_INSTALL}/usr/share/bootloader/overlays" kernel-artifacts/dtbs/ 2>/dev/null || true
+          fi
+
+          # Modules
+          MOD_BASE="${LINUX_INSTALL}/usr/lib/kernel-overlays/base/lib/modules"
+          if [ -d "${MOD_BASE}" ]; then
+            MOD_DIR=$(find "${MOD_BASE}" -maxdepth 1 -type d -name '*' | head -1)
+            if [ -n "${MOD_DIR}" ]; then
+              tar --zstd -cf kernel-artifacts/modules.tar.zst -C "${MOD_BASE}" "$(basename "${MOD_DIR}")"
+            fi
+          fi
+
+          ls -la kernel-artifacts/
+
+      - name: Package kernel artifacts
+        run: |
+          OUT="kernel-sm8550-${KERNEL_VERSION}.tar.zst"
+          tar --zstd -cf "${OUT}" kernel-artifacts
+          echo "ASSET=${OUT}" >> "$GITHUB_ENV"
+          echo "Created ${OUT}"
+          ls -lh "${OUT}"
+
+      - name: Upload kernel to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          RELEASE_TAG="kernel-sm8550"
+          gh release create "${RELEASE_TAG}" --title "kernel for SM8550" --notes "Cross-compiled kernel ${KERNEL_VERSION} for ROCKNIX SM8550." --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber
