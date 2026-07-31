@@ -618,6 +618,7 @@ pkg-config = '$PKG_CONFIG'
 llvm-config = '$SYSROOT_PREFIX/usr/bin/llvm-config'
 libgcrypt-config = '$SYSROOT_PREFIX/usr/bin/libgcrypt-config'
 rust = '$TOOLCHAIN/bin/rustc'
+sassc = '$TOOLCHAIN/bin/sassc'
 
 [build_machine]
 system = 'linux'

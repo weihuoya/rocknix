@@ -18,8 +18,17 @@ on:
     paths:
       - 'packages/graphics/gtk4/**/package.mk'
       - 'packages/graphics/graphene/**/package.mk'
-      - 'packages/devel/gobject-introspection/**/package.mk'
       - 'packages/multimedia/gstreamer/**/package.mk'
+      - 'packages/textproc/sassc/**/package.mk'
+      - 'packages/textproc/libsass/**/package.mk'
+      - 'packages/wayland/**/package.mk'
+      - 'packages/wayland/libxkbcommon/**/package.mk'
+      - 'packages/graphics/vulkan/**/package.mk'
+      - 'packages/print/freetype/**/package.mk'
+      - 'packages/x11/other/fontconfig/**/package.mk'
+      - 'packages/graphics/harfbuzz/**/package.mk'
+      - 'packages/x11/lib/libxcb/**/package.mk'
+      - 'packages/x11/lib/libX*/**/package.mk'
       - 'projects/ROCKNIX/packages/graphics/gtk4/**/package.mk'
 
 jobs:
@@ -86,32 +95,15 @@ jobs:
           tar --zstd -xf "${ASSET}"
           rm -f "${ASSET}"
 
-      - name: Snapshot host toolchain before extracting ashell-deps
+      - name: Snapshot host toolchain before build
         if: steps.deps_hit.outputs.hit != 'true'
         run: |
           # The gtk4-deps cache must include host toolchain artifacts installed by
-          # ashell-deps and by the packages built here, so that downstream gtk4
-          # builds can reuse them. Record the set of files/symlinks present before
-          # extracting ashell-deps, then package only the newly added paths afterwards.
+          # the packages built here, so that downstream gtk4 builds can reuse
+          # them. Record the set of files/symlinks present before the build, then
+          # package only the newly added paths afterwards.
           find "build.ROCKNIX-${{ env.DEVICE }}.aarch64/toolchain" \( -type f -o -type l \) | \
             LC_ALL=C sort > toolchain-before.txt
-
-      - name: Download ashell-deps
-        if: steps.deps_hit.outputs.hit != 'true'
-        run: |
-          ASSET="deps-aarch64-${{ env.DEVICE }}.tar.zst"
-          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/ashell-aarch64-${{ env.DEVICE }}"
-          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
-          # Exclude the toolchain Python installation to avoid stdlib / ABI
-          # mismatches that break meson. The host Python and meson from the
-          # toolchain must not be overwritten by ashell-deps.
-          tar --zstd -xf "${ASSET}" \
-            --exclude="./build.ROCKNIX-${DEVICE}.aarch64/toolchain/lib/libpython3.13*" \
-            --exclude="./build.ROCKNIX-${DEVICE}.aarch64/toolchain/lib/python3.13" \
-            --exclude="./build.ROCKNIX-${DEVICE}.aarch64/toolchain/bin/python3*" \
-            --exclude="./build.ROCKNIX-${DEVICE}.aarch64/toolchain/bin/meson" \
-            --exclude="./build.ROCKNIX-${DEVICE}.aarch64/toolchain/share/man/man1/python3.13.1"
-          rm -f "${ASSET}"
 
       - name: Build gtk4 dependencies
         if: steps.deps_hit.outputs.hit != 'true'
@@ -129,7 +121,7 @@ jobs:
           set -e
           {
             echo 'set -e'
-            echo 'for pkg in gobject-introspection gstreamer gst-plugins-base graphene gtk4; do'
+            echo 'for pkg in wayland wayland-protocols libxkbcommon vulkan-headers vulkan-loader fontconfig freetype harfbuzz libxcb libX11 libXcursor libXrandr libXi libXinerama libXrender libXext libXfixes libXau gstreamer gst-plugins-base graphene gtk4; do'
             echo '  echo "=== Building $pkg ==="'
             echo '  ./scripts/build "$pkg":target'
             echo 'done'
@@ -206,3 +198,12 @@ jobs:
           mv gtk4-deps.tar.zst "${ASSET}"
           gh release create "gtk4-aarch64-${{ env.DEVICE }}" --title "gtk4 for ${{ env.DEVICE }}" --notes "Cross-compiled GTK4 and dependencies for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
           gh release upload "gtk4-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always() && steps.deps_hit.outputs.hit != 'true'
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

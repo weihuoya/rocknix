@@ -32,8 +32,8 @@ unset LD_LIBRARY_PATH
 
 rm -f "${STAMP_URL}" "${STAMP_SHA}"
 
-# Build download URLs: original source first, then mirror 1, then mirror 2
-PKG_URLS="${PKG_URL} ${PKG_MIRROR_URL_1} ${PKG_MIRROR_URL_2}"
+# Build download URLs: weihuoya mirror first, then ROCKNIX mirror, then original source
+PKG_URLS="${PKG_MIRROR_URL_1} ${PKG_MIRROR_URL_2} ${PKG_URL}"
 
 NBWGET=3
 DOWNLOADED_FROM_MIRROR="no"
@@ -45,8 +45,8 @@ while [ ${NBWGET} -gt 0 ]; do
 
       [ -z "${PKG_SHA256}" -o "${PKG_SHA256}" = "${CALC_SHA256}" ] && {
         [ "${url}" = "${PKG_MIRROR_URL_1}" -o "${url}" = "${PKG_MIRROR_URL_2}" ] && DOWNLOADED_FROM_MIRROR="yes"
-        # Log if downloaded from official mirror (source 3)
-        [ "${url}" = "${PKG_MIRROR_URL_2}" ] && build_msg "CLR_WARNING" "WARNING" "${PKG_NAME}: Downloaded from fallback mirror, original source failed: ${PKG_URL}"
+        # Log if we had to fall back to the original upstream source
+        [ "${url}" = "${PKG_URL}" ] && build_msg "CLR_WARNING" "WARNING" "${PKG_NAME}: Downloaded from original source: ${PKG_URL}"
         break 2
       }
 
