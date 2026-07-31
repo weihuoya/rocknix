@@ -372,3 +372,62 @@ neatvnc 的 `choose_frame_encoding()` 要求同时满足：
 #### 10.4 已知限制
 
 根据此前在 `192.168.31.210` 上的排查，SM8550 掌机即使 `qcom-iris-encoder` 可用，H.264 仍可能无法启用，因为 Sway 合成器回退到 Pixman 软件渲染，只能提供 SHM 缓冲区，不满足 `NVNC_BUFFER_GBM_BO` 要求。根本原因是 Adreno 740 GMU 设备 `3d6a000.gmu` 未绑定驱动，需要在内核/设备树层面修复 GPU 驱动后，Sway 才能提供 dma-buf 捕获缓冲区。
+
+### 2026-08-01 修复 qcom-iris packed NV12 单平面描述符
+
+#### 11.1 问题现象
+
+在 `192.168.31.210` 上启用 Open H.264 后，wayvnc 运行一段时间后崩溃，eu-stack 指向 `open_h264_handle_packet()` → `vec_append()` → `realloc()`，报错 `corrupted size vs. prev_size`，说明堆在更早阶段被破坏。
+
+关键排查结论：
+
+- 已排除 DMABUF 分支 `src_memory` 未传递导致的 NULL 解引用（已修复）。
+- `sws_scale` 返回 `rc=720`，说明软件颜色空间转换本身成功。
+- `qcom-iris-encoder` 在 `VIDIOC_REQBUFS` / `VIDIOC_QUERYBUF` 阶段把 NV12 源缓冲区作为一个连续 plane 返回，但 neatvnc 在 `VIDIOC_QBUF` 阶段只设置 `buffer.length = 1`，用单平面长度去描述双平面格式，导致内核写越界、堆损坏。
+
+#### 11.2 修改内容
+
+文件：`/home/weiz/Projects/neatvnc/src/enc/h264/v4l2m2m-impl.c`，函数 `encode_buffer_mmap()`。
+
+当检测到 `packed_yuv`（NV12/NV21 只有一个 mmap plane）时：
+
+- 不再把 `srcbuf->buffer.length` 设为 `1` 并合并 Y/UV size。
+- 改为设置 `buffer.length = 2`，填充两个 V4L2 plane descriptor：
+  - `planes[0]`：Y 平面，`bytesused = y_size`，`data_offset = 0`。
+  - `planes[1]`：UV 平面，`bytesused = uv_size`，`data_offset = y_size`。
+  - 两个 plane 共享同一个 `m.mem_offset`（来自 QUERYBUF 的连续缓冲区偏移），`length` 均为整个缓冲区大小。
+- `sws_scale` 的 `dst_data[0]/dst_data[1]` 与 `dst_stride` 保持原有逻辑不变。
+- `free_src_buffers()` 只 `munmap` 一次 `mmap_payload[0]`，不受影响。
+
+新增调试日志：当 packed yuv 以双平面描述符 queue 时，打印 `total`、`y_size`、`uv_size`、`mem_offset`。
+
+#### 11.3 源码与构建更新
+
+- `neatvnc` 源码仓库：`/home/weiz/Projects/neatvnc`
+  - 提交并推送到 `weihuoya/neatvnc:master`
+  - 新提交：`c7d5bb7f77f4447f27777952929623a975739a6e`
+- `rocknix` 源码仓库：`/home/weiz/Projects/rocknix-distribution-next`
+  - 更新 `projects/ROCKNIX/packages/tools/neatvnc/package.mk` 的 `PKG_VERSION` 为 `c7d5bb7f77f4447f27777952929623a975739a6e`
+  - 推送到 `weihuoya/rocknix:next`
+- 触发 GitHub Actions workflow：
+
+  ```bash
+  gh workflow run build-aarch64-wayvnc-deps.yml -R weihuoya/rocknix --ref next
+  ```
+
+  Run URL: <https://github.com/weihuoya/rocknix/actions/runs/30647232770>
+
+  构建产物：`wayvnc-deps-aarch64-SM8550.tar.zst`，上传到 `weihuoya/rocknix` 的 `wayvnc-aarch64-SM8550` release。
+
+#### 11.4 待验证
+
+- 下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst`。
+- 按第 2.1 节重新准备 `wayvnc_deploy`（注意：应同时重新构建 `wayvnc-v0.10.1-rocknix-sm8550.tar.gz`，避免 `Symbol 'nvnc_version' has different size` 警告）。
+- 部署到 `192.168.31.210`，VNC 客户端连接并观察日志。
+- 重点确认：
+  - `v4l2m2m: packed yuv queued as 2 planes` 日志出现。
+  - 长时间运行不再 `corrupted size vs. prev_size` 崩溃。
+  - H.264 编码是否真的启用（`open-h264: selecting H.264 encoding`）。
+- 如果 qcom-iris 不接受两个 plane descriptor 的 queue，备选方向：
+  - 把 SIMPLE buffer 复制到临时 GBM BO 走 DMABUF 路径；或
+  - 让 wayvnc 强制提供 dmabuf 捕获帧。
