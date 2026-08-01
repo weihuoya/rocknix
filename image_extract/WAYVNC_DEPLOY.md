@@ -547,3 +547,173 @@ corrupted size vs. prev_size
 3. 如果释放旧 chunk 就崩溃，说明元数据在 `free` 时已经损坏，需要进一步用 `MALLOC_CHECK_` 或其他工具定位。
 4. 如果释放成功但 `malloc(10948)` 崩溃，说明整个堆空间被污染。
 5. 若 H.264 流能持续输出，可视为临时绕过；长期仍需找出真正破坏 `pending` chunk 的代码。
+
+
+### 2026-08-01（c） 第五次修改：用多尺寸堆检查 + 日志刷新定位破坏源
+
+#### 11.12 问题现象
+
+下载 `fdbd6ad` 构建产物并重新部署到 `192.168.10.155`（继续使用 `wayvnc-3423d09-rocknix-sm8550.tar.gz` 二进制，不带 `--gpu`）后：
+
+- 第一次编码帧成功输出，H.264 数据大小约 5474 字节。
+- 当 VNC 客户端触发屏幕尺寸从 1280×720 切换到 2560×1440 时，`open_h264_resize()` 需要重新创建 encoder。
+- 崩溃出现在 `open_h264_resize before h264_encoder_create` 之后、`v4l2m2m_create` 的任何新日志之前：
+
+  ```text
+  DEBUG: ../src/enc/h264/open-h264.c: ...: heap-ok: open_h264_resize before h264_encoder_create
+  corrupted double-linked list
+  ```
+
+关键发现：
+
+- 此前的 `check_heap()` 只 `malloc(1048576)`。在 glibc 默认配置下，≥128KB 的分配很可能走 `mmap`，不会遍历主堆的 free list，因此无法检测主堆元数据损坏。
+- 崩溃点在 `h264_encoder_v4l2m2m_create()` 早期（可能在 `calloc(sizeof(*self))` 时），说明主堆 free list 在进入该函数前已被破坏。
+- 第一次编码帧完成后所有检查点都曾显示“ok”，但那只说明 mmap 路径没有异常，主堆可能在第一次编码期间或两次帧之间被破坏。
+- 日志缓冲可能导致最后几条检查点没有 flush 到磁盘， crash 时丢失关键上下文。
+
+#### 11.13 第五次修改
+
+在 `/home/weiz/Projects/neatvnc` 中：
+
+1. `src/enc/h264/open-h264.c` 与 `src/enc/h264/v4l2m2m-impl.c` 的 `check_heap()` 改为多尺寸分配：
+   - 依次 `malloc(16)`、`malloc(256)`、`malloc(1024)`、`malloc(65536)`、`malloc(1048576)`。
+   - 每个都 `memset` 后 `free`。
+   - 任一尺寸失败都打印 `heap-broken: <where> size=<size>`，全部通过才打印 `heap-ok`。
+   - 每次调用后 `fflush(stderr)`，确保崩溃前所有检查点都已落盘。
+2. 在关键路径新增密集检查点：
+   - `encode_buffer_mmap`：`sws_scale` 后、source frame unref 后、plane setup 后。
+   - `encode_buffer`：encode 前后、`v4l2_qbuf` 前后。
+   - `process_dst_bufs`：`on_packet_ready` 前后。
+   - `v4l2m2m_feed`：entry、`process_src_bufs` 后、`encode_buffer` 后。
+   - `open_h264_ctx_encode`：`h264_encoder_feed` 前后。
+   - `open_h264_resize`：`h264_encoder_destroy` 前后。
+
+> **构建修复**：第一次提交 `68608c8...` 因 `open-h264.c` 缺少 `<stdio.h>` 且引用了未定义的 `ARRAY_LENGTH` 宏而编译失败。已修正为 `#include <stdio.h>` 并使用 `sizeof(sizes)/sizeof(sizes[0])`。
+
+这样下一次崩溃时，最后一条 `heap-ok` 与崩溃位置之间的区间就是堆破坏发生的精确范围。
+
+提交 hash：`53b77d925ea22605f6942d92e854271e58082437`（修复 `ARRAY_LENGTH` 与 `<stdio.h>` 构建错误）
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `2dfe3098fb`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30687316264>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.14 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 并重新部署到 `192.168.10.155`（继续使用 `wayvnc-3423d09-rocknix-sm8550.tar.gz` 二进制，启动脚本不带 `--gpu`）：
+
+1. 启动并连接 VNC 客户端，触发分辨率变化。
+2. 观察日志中最后一条 `heap-ok:` 或 `v4l2m2m: heap-ok:` 出现在哪里。
+3. 如果最后一条 `heap-ok` 出现在 `v4l2m2m_create after calloc` 之前，说明 `calloc` 本身检测到破坏，需继续向上追溯最后通过的检查点。
+4. 如果最后一条 `heap-ok` 出现在 `encode_buffer after qbuf` 或 `process_dst_bufs after on_packet_ready` 之后，说明破坏发生在 V4L2 驱动写输出 buffer 或回调处理阶段。
+5. 根据区间继续缩小范围，直到找到具体越界写或释放后使用的代码。
+
+
+#### 11.15 第六次修改：扩展 check_heap 尺寸并添加 exact-size 探针
+
+分析日志后发现：
+
+- 第一次 H.264 帧（1280×720）完全成功，所有 `heap-ok` 检查点通过。
+- 当屏幕捕获缓冲区分辨率从 1280×720 切到 1440×2560 后，VNC 客户端又请求 2560×1440 编码，触发 `open_h264_resize` → `h264_encoder_create`。
+- 崩溃精确发生在 `v4l2m2m_create entry` 与 `v4l2m2m_create after calloc` 之间，即 `calloc(1, sizeof(struct h264_encoder_v4l2m2m))` 阶段，报 `corrupted double-linked list`。
+- 设置 `MALLOC_CHECK_=3` 没有提供额外诊断，说明这是 glibc 自由链表元数据损坏，而非轻量检查能捕获的简单错误。
+- 此前 `check_heap` 只测试了 16/256/1024/65536/1MB 几个离散尺寸，可能遗漏了 `struct h264_encoder_v4l2m2m` 所在的具体 size bin。
+
+修改：
+
+1. `open-h264.c` 和 `v4l2m2m-impl.c` 的 `check_heap()` 扩展为连续尺寸：16, 64, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576。
+2. 在 `h264_encoder_v4l2m2m_create()` 的 `calloc` 之前增加 exact-size 探针：
+   - `malloc(sizeof(struct h264_encoder_v4l2m2m))` → `memset` → `free`。
+   - 打印 `v4l2m2m: heap-ok exact self_size=<N> before calloc` 或 `heap-broken`。
+3. 部署脚本增加 `MALLOC_PERTURB_=0xA5` 与 `MALLOC_CHECK_=3`。
+
+提交 hash：`03299f20a10e3e2a5afb33508c06c14c78b3af88`
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `1fdba1dd21`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30688267318>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.16 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 并重新部署到 `192.168.10.155`（继续使用 `wayvnc-3423d09-rocknix-sm8550.tar.gz` 二进制，启动脚本带 `MALLOC_CHECK_=3 MALLOC_PERTURB_=0xA5`）：
+
+1. 观察 `v4l2m2m_create entry` 的 `check_heap` 是否报 `heap-broken size=<X>`。如果报，说明尺寸 `<X>` 的 size bin 在 resize 前已被破坏，需继续向上追溯是在 `process_dst_bufs after v4l2_qbuf` 之后还是 `open_h264_encode start` 之后被破坏。
+2. 观察 `v4l2m2m: heap-ok exact self_size=<N> before calloc` 是否出现。如果出现，说明 `calloc` 本身对同一尺寸敏感，而 `malloc/free` 不敏感；如果未出现，则该尺寸 bin 已损坏。
+3. 根据新日志进一步缩小堆破坏源：可能方向是 `wayvnc` 的 buffer pool 重配置（`ext-image-copy-capture.c` / `buffer.c`）在 1440×2560 重配置时释放/分配出错，或 `nvnc_frame` 生命周期管理有 bug。
+
+
+#### 11.17 第七次修改：用 malloc+memset 替换 calloc 定位 alloc 行为差异
+
+新日志关键发现：
+
+```text
+v4l2m2m: heap-ok exact self_size=1824 before calloc
+corrupted double-linked list
+```
+
+- `v4l2m2m_create entry` 的 `check_heap()` 全部 15 个尺寸通过，说明离散 size bin 暂时健康。
+- 在 `calloc(1, sizeof(struct h264_encoder_v4l2m2m))` 之前增加 exact-size `malloc(1824) + memset + free` 探针，结果通过。
+- 但紧接着 `calloc(1, 1824)` 立刻崩溃，报 `corrupted double-linked list`。
+- 这意味着：**同尺寸 `malloc`/`free` 路径不触发检测，而 `calloc` 在访问 1824 字节 free list 时检测到元数据损坏**。两者可能走了不同的 glibc 路径，或 `calloc` 额外做了合并/检查。
+
+修改：
+
+1. 在 `h264_encoder_v4l2m2m_create()` 中把 `calloc(1, sizeof(*self))` 临时替换为 `malloc(sizeof(*self))` + `memset(self, 0, sizeof(*self))`。
+2. 在替换前执行 3 轮 `malloc(self_size) + memset + free` 探针，确认 `malloc/free` 路径稳定。
+
+提交 hash：`4a1720a849aaaeba3555c7f95996cf2cace1726f`
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `4eefd8be54`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30688826100>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.18 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 并重新部署到 `192.168.10.155`：
+
+1. 观察 `v4l2m2m_create entry` 的 3x `malloc/free` 探针是否全部通过。
+2. 观察 `malloc+memset` 替换后是否能成功创建第二个 encoder（2560×1440）。
+3. 如果成功创建第二个 encoder，继续观察 H.264 流是否能持续输出，或是否在新的位置崩溃。
+4. 如果 `malloc+memset` 也崩溃，说明 1824 字节 free list 本身已被污染，需要检查 `wayvnc` 的 buffer pool 重配置或 `nvnc_frame` 生命周期。
+5. 如果 `malloc+memset` 通过且 H.264 工作，说明 `calloc` 在 1824 字节路径上有特殊行为触发该损坏；长期仍需找到堆破坏源，避免后续出现静默错误。
+
+
+#### 11.19 第八次修改：用 mmap 分配 encoder self 绕过堆损坏
+
+最新日志发现：
+
+```text
+v4l2m2m: heap-ok exact self_size=1824 3x malloc/free before calloc
+corrupted double-linked list
+```
+
+- 3 轮 `malloc(1824) + memset + free` 探针全部通过。
+- 但紧随其后的 `malloc(1824)`（用于实际创建第二个 encoder）仍崩溃，报 `corrupted double-linked list`。
+- 这说明 1824 字节 free list 确实存在元数据损坏，且 `malloc`/`free` 循环本身可能一步步把损坏放大，直到实际分配时触发检测；也可能第 4 次分配正好取到损坏节点。
+
+修改：
+
+1. 在 `h264_encoder_v4l2m2m_create()` 中，把 `struct h264_encoder_v4l2m2m* self` 的分配从堆分配改为 `mmap(..., sizeof(*self), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)`，然后 `memset` 清零。
+2. 在创建失败的 `failure` 路径中，如果 `self` 已 mmap 成功，用 `munmap(self, sizeof(*self))` 释放。
+3. 在 `h264_encoder_v4l2m2m_destroy()` 中，用 `munmap(self, sizeof(*self))` 替代 `free(self)`。
+
+这样 encoder 的核心结构体不再占用 glibc 堆，而是独立匿名页，彻底避开 1824 字节 free list 损坏导致的崩溃。
+
+提交 hash：`94b9c96d48a26c00db77267ce5f269e46083b0c5`
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `6b4bd8971b`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30690616407>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.20 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 并重新部署到 `192.168.10.155`：
+
+1. 确认第二个 encoder（2560×1440）能成功创建，`v4l2m2m_create after mmap+memset` 检查点通过。
+2. 继续观察 H.264 流是否能持续输出，VNC 画面是否正常。
+3. 如果 H.264 工作，说明用 `mmap` 成功绕过堆损坏。但堆损坏的根本原因仍未定位；建议后续使用 `valgrind`、`ASAN` 或 `mprotect` 守卫页进一步追查 `wayvnc` buffer pool / `nvnc_frame` 生命周期中谁污染了 1824 字节 free list。
+4. 如果在新的 `malloc` 位置（例如 `open_h264_context_new` 的 `calloc` 或 `vec_append` 的 `realloc`）再次崩溃，则堆损坏仍在影响其它结构体，需要继续扩大 `mmap` 隔离或追查破坏源。
