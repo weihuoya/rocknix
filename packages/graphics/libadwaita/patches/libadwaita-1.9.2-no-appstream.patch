@@ -1,0 +1,105 @@
+diff --git a/meson.build b/meson.build
+index 1234567..abcdefg 100644
+--- a/meson.build
++++ b/meson.build
+@@ -40,13 +40,7 @@ glib_dep = dependency('glib-2.0', version: glib_min_version)
+ gio_dep = dependency('gio-2.0', version: glib_min_version)
+ gtk_dep = dependency('gtk4', version: gtk_min_version)
+ fribidi_dep = dependency('fribidi')
+-appstream_dep = dependency('appstream',
+-  fallback : ['appstream', 'appstream_dep'],
+-  default_options : [
+-    'systemd=false', 'apidocs=false', 'install-docs=false',
+-    'stemming=false', 'svg-support=false', 'gir=false',
+-  ],
+-)
++appstream_dep = declare_dependency()
+ 
+ target_system = host_machine.system()
+ if target_system == 'darwin'
+diff --git a/src/meson.build b/src/meson.build
+index 1234567..abcdefg 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -332,7 +332,6 @@ libadwaita_deps = [
+   fribidi_dep,
+   gio_dep,
+   gtk_dep,
+-  appstream_dep,
+   cc.find_library('m', required: false),
+ ]
+ 
+diff --git a/src/adw-about-dialog.c b/src/adw-about-dialog.c
+index 1234567..abcdefg 100644
+--- a/src/adw-about-dialog.c
++++ b/src/adw-about-dialog.c
+@@ -7,7 +7,9 @@
+ 
+ #include "config.h"
+ #include <glib/gi18n-lib.h>
++#if 0
+ #include <appstream.h>
++#endif
+ 
+ #include "adw-about-dialog.h"
+ 
+@@ -437,6 +439,7 @@ get_release_for_version (AsRelease  *rel,
+   return !g_strcmp0 (as_release_get_version (rel), version);
+ }
+ 
++#if 0
+ static void
+ populate_from_appdata (AdwAboutDialog *self)
+ {
+@@ -1213,6 +1216,13 @@ populate_from_appdata (AdwAboutDialog *self)
+   g_free (appdata_uri);
+ }
+ 
++#else
++static void
++populate_from_appdata (AdwAboutDialog *self)
++{
++  return;
++}
++#endif
++
+ static void
+ adw_about_dialog_get_property (GObject    *object,
+                                guint       prop_id,
+diff --git a/src/adw-about-window.c b/src/adw-about-window.c
+index 1234567..abcdefg 100644
+--- a/src/adw-about-window.c
++++ b/src/adw-about-window.c
+@@ -6,7 +6,9 @@
+ 
+ #include "config.h"
+ #include <glib/gi18n-lib.h>
++#if 0
+ #include <appstream.h>
++#endif
+ 
+ #include "adw-about-window.h"
+ 
+@@ -428,6 +430,7 @@ get_release_for_version (AsRelease  *rel,
+   return !g_strcmp0 (as_release_get_version (rel), version);
+ }
+ 
++#if 0
+ static void
+ populate_from_appdata (AdwAboutWindow *self)
+ {
+@@ -1212,6 +1215,13 @@ populate_from_appdata (AdwAboutWindow *self)
+   g_free (appdata_uri);
+ }
+ 
++#else
++static void
++populate_from_appdata (AdwAboutWindow *self)
++{
++  return;
++}
++#endif
++
+ static void
+ adw_about_window_get_property (GObject    *object,
+                                guint       prop_id,
