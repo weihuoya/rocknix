@@ -12,9 +12,9 @@ PKG_DEPENDS_TARGET="toolchain gtk4 glib"
 PKG_LONGDESC="Building blocks for modern GNOME applications."
 PKG_BUILD_FLAGS="-sysroot"
 
-PKG_MESON_OPTS_TARGET="-Dtests=false \\
-                       -Dvapi=false \\
-                       -Dintrospection=disabled \\
-                       -Dgtk_doc=false \\
+PKG_MESON_OPTS_TARGET="-Dtests=false \
+                       -Dvapi=false \
+                       -Dintrospection=disabled \
+                       -Dgtk_doc=false \
                        -Dexamples=false"
 
