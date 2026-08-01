@@ -453,11 +453,48 @@ neatvnc 的 `choose_frame_encoding()` 要求同时满足：
 - Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30680671723>
 - 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
 
-#### 11.6 待验证
+#### 11.6 第三次部署后的新发现
 
-下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 重新部署到 `192.168.10.155` 后，重点观察：
+下载 `3c1e0c6` 构建产物重新部署到 `192.168.10.155` 并连接 VNC 客户端后：
 
-- `v4l2m2m: packed_yuv calc height=1440 stride=2560 y_size=3686400 uv_size=1843200`（uv_size 应为 1843200）。
-- `v4l2m2m: heap sanity ok before on_packet_ready` 是否出现。
-- 如果堆健康检查通过但 `vec_append` 仍崩溃，说明堆损坏发生在 `open_h264_handle_packet` 内部；如果健康检查就崩溃，说明损坏来自 V4L2 / 驱动。
-- 若仍崩溃，下一步需要检查 `context` 结构体相邻内存是否被 `h264_encoder_v4l2m2m` 内部数组或 GBM/捕获路径越界写，或者尝试把 `context->pending` 改在 `open_h264` 中分配而非与 `context` 相邻。
+- `uv_size` 已修正：日志显示 `packed_yuv calc height=720 stride=1280 y_size=921600 uv_size=460800`（正确值）。
+- 但崩溃点没有到达 `process_dst_bufs` 的堆健康检查，也没有到达 `open_h264_handle_packet`。
+- 崩溃发生在第一次源缓冲区成功 queue 之后、屏幕捕获尝试分配 GBM buffer 时：
+
+  ```text
+  v4l2m2m: source buffer 0 queued
+  DEBUG: ../src/ext-image-copy-capture.c: 355: Buffer dimensions: 512x512
+  DEBUG: ../src/buffer.c: 639: Reconfiguring buffer pool
+  ...
+  DEBUG: ../src/buffer.c: 569: Using render node: /dev/dri/renderD128
+  (wayvnc 进程消失，dmesg 显示 coredump 失败)
+  ```
+
+- 关键原因：当前部署的 `wayvnc` 二进制是 **7 月 30 日旧构建**，它基于旧版 `neatvnc` 编译，日志里的文件/行号（如 `../src/buffer.c:639`）与新版 `libneatvnc.so` 源码不匹配。旧二进制 + 新 `libneatvnc.so` 存在 ABI/结构体布局风险，导致 GBM buffer 捕获路径在 reconfiguration 阶段崩溃。
+- 这与之前 `Symbol 'nvnc_version' has different size` 警告同源：必须同时重新构建 `wayvnc` 二进制。
+
+#### 11.7 第三次修改：重建 wayvnc 二进制
+
+触发 `build-aarch64-wayvnc.yml` workflow，使用当前 `weihuoya/wayvnc` 的 `master` 分支（commit `3423d09178721b4eab8ee38d760cc5a4f2fc7d58`）和最新的 `wayvnc-deps`：
+
+```bash
+gh workflow run build-aarch64-wayvnc.yml -R weihuoya/rocknix --ref next \
+  -f wayvnc_repo=weihuoya/wayvnc \
+  -f wayvnc_ref=3423d09178721b4eab8ee38d760cc5a4f2fc7d58
+```
+
+Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30681232539>
+
+产物：`wayvnc-v<version>-rocknix-sm8550.tar.gz`（上传到 `wayvnc-aarch64-SM8550` release）。
+
+#### 11.8 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 和新的 `wayvnc-...-rocknix-sm8550.tar.gz` 后，一起重新部署到 `192.168.10.155`：
+
+1. 按第 2.1 节重新准备 `wayvnc_deploy` 目录（这次要同时替换 `wayvnc`/`wayvncctl` 二进制和全部库）。
+2. 上传并启动。
+3. VNC 客户端连接，观察：
+   - 是否不再在 `buffer.c: Reconfiguring buffer pool` 阶段崩溃。
+   - 是否到达 `v4l2m2m: heap sanity ok before on_packet_ready`。
+   - 如果到达堆健康检查且通过，再看 `open_h264_handle_packet` 是否还崩溃。
+   - 如果 H.264 流能持续输出且 VNC 画面正常，则成功。
