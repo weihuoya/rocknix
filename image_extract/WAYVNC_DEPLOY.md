@@ -419,15 +419,45 @@ neatvnc 的 `choose_frame_encoding()` 要求同时满足：
 
   构建产物：`wayvnc-deps-aarch64-SM8550.tar.zst`，上传到 `weihuoya/rocknix` 的 `wayvnc-aarch64-SM8550` release。
 
-#### 11.4 待验证
+#### 11.4 验证日志与后续发现
 
-- 下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst`。
-- 按第 2.1 节重新准备 `wayvnc_deploy`（注意：应同时重新构建 `wayvnc-v0.10.1-rocknix-sm8550.tar.gz`，避免 `Symbol 'nvnc_version' has different size` 警告）。
-- 部署到 `192.168.31.210`，VNC 客户端连接并观察日志。
-- 重点确认：
-  - `v4l2m2m: packed yuv queued as 2 planes` 日志出现。
-  - 长时间运行不再 `corrupted size vs. prev_size` 崩溃。
-  - H.264 编码是否真的启用（`open-h264: selecting H.264 encoding`）。
-- 如果 qcom-iris 不接受两个 plane descriptor 的 queue，备选方向：
-  - 把 SIMPLE buffer 复制到临时 GBM BO 走 DMABUF 路径；或
-  - 让 wayvnc 强制提供 dmabuf 捕获帧。
+在 `192.168.10.155` 上重新部署并连接 VNC 客户端后，日志显示：
+
+- 编码器成功 probe：`v4l2m2m: H.264 probe OK on iris_driver`。
+- H.264 编码被选中：`Choosing open-h264 encoding for client ...`。
+- 第一次编码帧成功产出：`v4l2m2m: encoded frame (index 0) ... size 80875`。
+- 崩溃仍发生在 `open_h264_handle_packet()` 中 `vec_append` 触发 `realloc` 时：
+
+  ```text
+  open-h264: handle_packet start size=80875 pts=18446744073709551615
+  open-h264: handle_packet context=0x23e5cb10 self=0x23e5c8c0
+  open-h264: handle_packet pending data=0x23e5cb60 len=0 cap=4096
+  open-h264: handle_packet about to vec_append
+  corrupted size vs. prev_size
+  ```
+
+- `context=0x23e5cb10` 与 `pending.data=0x23e5cb60` 只相隔 0x50 = 80 字节。`struct open_h264_context` 实际大小为 64 字节，其后的 16 字节正是 `pending.data` 堆块的 malloc 元数据。`corrupted size vs. prev_size` 说明 `context` 结构体末尾或该 malloc 元数据被越界写破坏。
+
+- 同时发现 `uv_size` 计算有误：在 packed 单平面分支里调用了 `get_plane_size(..., self->height / 2, 1)`，而该函数内部对 plane 1 又会再 halve 一次 height，导致 UV `bytesused` 只有实际一半（2560×1440 下 `uv=921600` 而非正确的 1843200）。这会让 qcom-iris 拿到的 UV 长度不完整，可能触发驱动越界读写。
+
+#### 11.5 第二次修改
+
+- 修正 `uv_size` 计算：对 packed 单平面 NV12，把 `self->height / 2` 改为 `self->height`（因为 `get_plane_size` 内部已 halve）。
+- 在 `process_dst_bufs()` 调用 `on_packet_ready` 前加 `malloc(16)/free` 堆健康检查日志，确认堆损坏是否发生在 V4L2 出队之后、回调之前。
+- 在 `open_h264_handle_packet()` 中保留 `context` / `pending` 指针与字段日志。
+
+提交 hash：`3c1e0c6ce4aa49f99c0e706b0e4a7141d0202f62`
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `340a806427`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30680671723>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.6 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 重新部署到 `192.168.10.155` 后，重点观察：
+
+- `v4l2m2m: packed_yuv calc height=1440 stride=2560 y_size=3686400 uv_size=1843200`（uv_size 应为 1843200）。
+- `v4l2m2m: heap sanity ok before on_packet_ready` 是否出现。
+- 如果堆健康检查通过但 `vec_append` 仍崩溃，说明堆损坏发生在 `open_h264_handle_packet` 内部；如果健康检查就崩溃，说明损坏来自 V4L2 / 驱动。
+- 若仍崩溃，下一步需要检查 `context` 结构体相邻内存是否被 `h264_encoder_v4l2m2m` 内部数组或 GBM/捕获路径越界写，或者尝试把 `context->pending` 改在 `open_h264` 中分配而非与 `context` 相邻。
