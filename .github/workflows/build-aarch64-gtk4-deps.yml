@@ -17,6 +17,7 @@ on:
     branches: [main]
     paths:
       - 'packages/graphics/gtk4/**/package.mk'
+      - 'packages/graphics/libadwaita/**/package.mk'
       - 'packages/graphics/graphene/**/package.mk'
       - 'packages/multimedia/gstreamer/**/package.mk'
       - 'packages/textproc/sassc/**/package.mk'
@@ -30,6 +31,7 @@ on:
       - 'packages/x11/lib/libxcb/**/package.mk'
       - 'packages/x11/lib/libX*/**/package.mk'
       - 'projects/ROCKNIX/packages/graphics/gtk4/**/package.mk'
+      - 'packages/graphics/libadwaita/**/package.mk'
 
 jobs:
   build-aarch64-gtk4-deps:
@@ -121,7 +123,7 @@ jobs:
           set -e
           {
             echo 'set -e'
-            echo 'for pkg in wayland wayland-protocols libxkbcommon vulkan-headers vulkan-loader fontconfig freetype harfbuzz libxcb libX11 libXcursor libXrandr libXi libXinerama libXrender libXext libXfixes libXau gstreamer gst-plugins-base graphene gtk4; do'
+            echo 'for pkg in wayland wayland-protocols libxkbcommon vulkan-headers vulkan-loader fontconfig freetype harfbuzz libxcb libX11 libXcursor libXrandr libXi libXinerama libXrender libXext libXfixes libXau gstreamer gst-plugins-base graphene gtk4 libadwaita; do'
             echo '  echo "=== Building $pkg ==="'
             echo '  ./scripts/build "$pkg":target'
             echo 'done'
