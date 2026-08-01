@@ -59,24 +59,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Retrieve prebuilt gtk4-deps
-        id: deps_hit
-        run: |
-          ASSET="gtk4-deps-aarch64-${{ env.DEVICE }}.tar.zst"
-          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/gtk4-aarch64-${{ env.DEVICE }}"
-          if curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"; then
-            tar --zstd -xf "${ASSET}"
-            rm -f "${ASSET}"
-            echo "hit=true" >> $GITHUB_OUTPUT
-            echo "Prebuilt gtk4-deps downloaded and extracted."
-          else
-            rm -f "${ASSET}"
-            echo "hit=false" >> $GITHUB_OUTPUT
-            echo "Prebuilt gtk4-deps not found, will build from source."
-          fi
-
       - name: Restore ccache
-        if: steps.deps_hit.outputs.hit != 'true'
         id: ccache-restore
         uses: actions/cache/restore@v5
         with:
@@ -86,7 +69,6 @@ jobs:
             ccache-aarch64-${{ env.DEVICE }}-gtk4-deps-
 
       - name: Download and extract fixed aarch64-toolchain
-        if: steps.deps_hit.outputs.hit != 'true'
         run: |
           ASSET="toolchain-aarch64-SM8550-2718568bd983a54f.tar.zst"
           URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
@@ -98,7 +80,6 @@ jobs:
           rm -f "${ASSET}"
 
       - name: Snapshot host toolchain before build
-        if: steps.deps_hit.outputs.hit != 'true'
         run: |
           # The gtk4-deps cache must include host toolchain artifacts installed by
           # the packages built here, so that downstream gtk4 builds can reuse
@@ -108,7 +89,6 @@ jobs:
             LC_ALL=C sort > toolchain-before.txt
 
       - name: Build gtk4 dependencies
-        if: steps.deps_hit.outputs.hit != 'true'
         run: |
           ./scripts/get_env > .env
           (
@@ -145,7 +125,6 @@ jobs:
             ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
 
       - name: Clean ccache
-        if: steps.deps_hit.outputs.hit != 'true'
         run: |
           export CCACHE_DIR=./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
           if command -v ccache &> /dev/null; then
@@ -166,7 +145,6 @@ jobs:
           key: ccache-aarch64-${{ env.DEVICE }}-gtk4-deps-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Compress gtk4-deps
-        if: steps.deps_hit.outputs.hit != 'true'
         run: |
           # Identify host toolchain files/symlinks newly added by the dependency build.
           find "build.ROCKNIX-${{ env.DEVICE }}.aarch64/toolchain" \( -type f -o -type l \) | \
@@ -192,7 +170,6 @@ jobs:
           if-no-files-found: error
 
       - name: Upload prebuilt gtk4-deps
-        if: steps.deps_hit.outputs.hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
