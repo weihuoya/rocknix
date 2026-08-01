@@ -498,3 +498,52 @@ Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30681232539>
    - 是否到达 `v4l2m2m: heap sanity ok before on_packet_ready`。
    - 如果到达堆健康检查且通过，再看 `open_h264_handle_packet` 是否还崩溃。
    - 如果 H.264 流能持续输出且 VNC 画面正常，则成功。
+
+- 若仍崩溃，下一步需要检查 `context` 结构体相邻内存是否被 `h264_encoder_v4l2m2m` 内部数组或 GBM/捕获路径越界写，或者尝试把 `context->pending` 改在 `open_h264` 中分配而非与 `context` 相邻。
+
+### 2026-08-01（b） 第四次修改：在 open_h264_handle_packet 开头释放并重置 pending vec
+
+#### 11.9 问题现象
+
+重建 `wayvnc` 二进制后，崩溃回到最初位置：
+
+```text
+open-h264: handle_packet start size=5474 pts=18446744073709551615
+open-h264: handle_packet context=0xc46c7e0 self=0xc483780
+open-h264: handle_packet pending data=0xc4931e0 len=0 cap=4096
+open-h264: handle_packet about to vec_append
+corrupted size vs. prev_size
+```
+
+关键发现：
+
+- `v4l2m2m: heap sanity ok before on_packet_ready` 已经出现，说明在 V4L2 出队、调用回调之前，**通用堆是健康的**。
+- `context`（0xc46c7e0）与 `pending.data`（0xc4931e0）相隔 154KB，不再相邻，因此之前的“`context` 越界写坏 `pending` 元数据”假设不成立。
+- 崩溃精确发生在 `vec_append` 内部 `realloc(context->pending.data, 10948)` 时，说明 `pending.data` 指向的这块 malloc chunk 的元数据被破坏了。
+
+#### 11.10 第四次修改
+
+为定位是这块 chunk 本身被破坏，还是 `realloc` 机制有问题，在 `open_h264_handle_packet()` 调用 `vec_append` 之前主动：
+
+1. 打印现有 `pending.data/len/cap`。
+2. `free(context->pending.data)`。
+3. 把 `pending.data` / `len` / `cap` 清零。
+
+这样 `vec_append` 会走 `realloc(NULL, 10948)`，等价于一次全新 `malloc`。如果仍崩溃，说明是整个堆已被污染；如果通过，说明原先那块 chunk 在创建后、回调前被某个中间步骤写坏。
+
+提交 hash：`fdbd6adf51a2efbe592fbad033ab028f9fc8efb6`
+
+- `neatvnc`：`weihuoya/neatvnc:master`
+- `rocknix`：`weihuoya/rocknix:next`（commit `f667cc7d9a`）
+- Workflow：<https://github.com/weihuoya/rocknix/actions/runs/30681851364>
+- 产物：`wayvnc-deps-aarch64-SM8550.tar.zst`
+
+#### 11.11 待验证
+
+下载新的 `wayvnc-deps-aarch64-SM8550.tar.zst` 并重新部署到 `192.168.10.155`（继续使用最新的 `wayvnc-3423d09-rocknix-sm8550.tar.gz` 二进制）：
+
+1. 观察日志是否出现 `open-h264: handle_packet freeing pending data=...`。
+2. 如果释放旧 chunk 成功且后续 `vec_append` 成功，则 H.264 编码流可能正常输出，说明原 chunk 被外部写坏（可能是 V4L2/GBM/捕获路径的越界写）。
+3. 如果释放旧 chunk 就崩溃，说明元数据在 `free` 时已经损坏，需要进一步用 `MALLOC_CHECK_` 或其他工具定位。
+4. 如果释放成功但 `malloc(10948)` 崩溃，说明整个堆空间被污染。
+5. 若 H.264 流能持续输出，可视为临时绕过；长期仍需找出真正破坏 `pending` chunk 的代码。
