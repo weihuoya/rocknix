@@ -2,7 +2,7 @@
 # Copyright (C) 2026-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="neatvnc"
-PKG_VERSION="6c25360b5cc933e925586323f51327a3c9065136"
+PKG_VERSION="94b9c96d48a26c00db77267ce5f269e46083b0c5"
 PKG_GIT_CLONE_BRANCH="master"
 PKG_LICENSE="ISC"
 PKG_SITE="https://github.com/weihuoya/neatvnc"
