@@ -1,0 +1,64 @@
+name: Build gcc-gdb for ROCKNIX aarch64
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+  push:
+    branches: [next]
+    paths:
+      - 'packages/lang/gcc-native/**'
+      - 'packages/devel/gdb/**'
+jobs:
+  build-aarch64-gcc-gdb:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+    steps:
+      - uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Download toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-2718568bd983a54f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"*
+      - name: Build gcc-native and gdb
+        run: |
+          ./scripts/get_env > .env
+          set -e
+          for pkg in gmp mpfr mpc gcc-native gdb; do
+            echo "=== Building $pkg ==="
+            ./scripts/build "$pkg":target
+          done
+      - name: Package gcc-gdb
+        run: |
+          tar --zstd -cf gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst \
+            -C build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg \
+            gcc-native gdb
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET="gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst"
+          gh release create "gcc-gdb-aarch64-${{ env.DEVICE }}" \
+            --title "GCC/GDB for ${{ env.DEVICE }}" \
+            --notes "Native GCC and GDB for ROCKNIX ${{ env.DEVICE }} aarch64." \
+            --prerelease || true
+          gh release upload "gcc-gdb-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
