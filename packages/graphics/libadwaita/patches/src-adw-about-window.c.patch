@@ -1,5 +1,5 @@
---- src/adw-about-window.c.orig	2026-08-01 23:47:59.386516223 +0800
-+++ src/adw-about-window.c	2026-08-01 23:47:59.428516290 +0800
+--- a/src/adw-about-window.c
++++ b/src/adw-about-window.c
 @@ -6,7 +6,6 @@
  
  #include "config.h"
@@ -7,4 +7,3 @@
 -#include <appstream.h>
  
  #include "adw-about-window.h"
- 
