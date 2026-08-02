@@ -1,6 +1,6 @@
 --- a/src/adw-about-dialog.c
 +++ b/src/adw-about-dialog.c
-@@ -7,7 +7,6 @@
+@@ -10,7 +10,6 @@
  
  #include "config.h"
  #include <glib/gi18n-lib.h>
@@ -8,11 +8,11 @@
  
  #include "adw-about-dialog.h"
  
-@@ -1089,6 +1088,8 @@
+@@ -2030,6 +2029,8 @@
  
-   g_assert (self->appdata_resource_path != NULL);
+   g_return_val_if_fail (resource_path, NULL);
  
-+  return;
++  return NULL;
 +
-   appdata_uri = g_strconcat ("resource://", self->appdata_resource_path, NULL);
+   appdata_uri = g_strconcat ("resource://", resource_path, NULL);
    appdata_file = g_file_new_for_uri (appdata_uri);
