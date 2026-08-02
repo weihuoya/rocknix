@@ -1,5 +1,5 @@
---- meson.build.orig	2026-08-01 23:46:19.098355846 +0800
-+++ meson.build	2026-08-01 23:47:08.535434902 +0800
+--- a/meson.build
++++ b/meson.build
 @@ -40,13 +40,7 @@
  gio_dep = dependency('gio-2.0', version: glib_min_version)
  gtk_dep = dependency('gtk4', version: gtk_min_version)
