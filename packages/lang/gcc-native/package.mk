@@ -31,7 +31,7 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
                            --disable-nls \
                            --disable-libada \
                            --disable-libmudflap \
-                           -,disable-libitm \
+                           --disable-libitm \
                            --disable-libquadmath \
                            --disable-libgomp \
                            --disable-libmpx \
@@ -48,7 +48,6 @@ pre_configure_target() {
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
   export CXXFLAGS="${CXXFLAGS} -O2"
-  # Prevent target flags from being used for build tools
   export CFLAGS_FOR_BUILD=""
   export CXXFLAGS_FOR_BUILD=""
   export LDFLAGS_FOR_BUILD=""
