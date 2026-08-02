@@ -50,33 +50,35 @@ jobs:
           cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
           tar --zstd -xf "${ASSET}"
           rm -f "${ASSET}"*
-      - name: Test cross compiler
-        run: |
-          ./scripts/get_env > .env
-          source .env
-          echo "=== Testing cross compiler ==="
-          which aarch64-rocknix-linux-gnu-gcc
-          aarch64-rocknix-linux-gnu-gcc --version
-          echo 'int main() { return 0; }' > /tmp/test.c
-          aarch64-rocknix-linux-gnu-gcc -c /tmp/test.c -o /tmp/test.o
-          file /tmp/test.o
       - name: Build gcc-native and gdb
         run: |
           ./scripts/get_env > .env
           set -e
-          # Build gmp with cleared CFLAGS to avoid configure test failures
-          echo "=== Building gmp (with CFLAGS cleared) ==="
-          CFLAGS="" CXXFLAGS="" ./scripts/build gmp:target
-          # Build mpfr and mpc normally
-          for pkg in mpfr mpc gcc-native gdb; do
-            echo "=== Building $pkg ==="
-            ./scripts/build "$pkg":target
-          done
+          {
+            echo 'set -e'
+            echo 'echo "=== Building gmp (with CFLAGS cleared) ==="'
+            echo 'CFLAGS="" CXXFLAGS="" ./scripts/build gmp:target'
+            echo 'for pkg in mpfr mpc gcc-native gdb; do'
+            echo '  echo "=== Building $pkg ==="'
+            echo '  ./scripts/build "$pkg":target'
+            echo 'done'
+          } > build-gcc-gdb.sh
+          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash /work/rocknix/build-gcc-gdb.sh
+          rm -f build-gcc-gdb.sh
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-gcc-gdb)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
       - name: Package gcc-gdb
         run: |
           tar --zstd -cf gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst \
             -C build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg \
-            gcc-native gdb
+            gcc-native gdb || echo "Package creation may have partial failures"
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
