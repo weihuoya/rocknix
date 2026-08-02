@@ -17,7 +17,6 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
                            --with-gmp=${SYSROOT_PREFIX}/usr \
                            --with-mpfr=${SYSROOT_PREFIX}/usr \
                            --with-mpc=${SYSROOT_PREFIX}/usr \
-                           --with-zstd=${SYSROOT_PREFIX}/usr \
                            --with-gnu-as \
                            --with-gnu-ld \
                            --enable-languages=c,c++ \
