@@ -1,6 +1,6 @@
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -332,7 +332,6 @@
+@@ -322,7 +322,6 @@
    fribidi_dep,
    gio_dep,
    gtk_dep,
