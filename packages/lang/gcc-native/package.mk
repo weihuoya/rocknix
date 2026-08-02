@@ -48,9 +48,18 @@ pre_configure_target() {
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
   export CXXFLAGS="${CXXFLAGS} -O2"
-  export CFLAGS_FOR_BUILD=""
-  export CXXFLAGS_FOR_BUILD=""
-  export LDFLAGS_FOR_BUILD=""
+}
+
+# Override configure to pass empty build flags
+configure_target() {
+  cd ${PKG_BUILD}
+  mkdir -p .${HOST_NAME}
+  cd .${HOST_NAME}
+  ../configure ${PKG_CONFIGURE_OPTS_TARGET} \
+    --prefix=/usr \
+    --with-build-cflags="" \
+    --with-build-cxxflags="" \
+    --with-build-ldflags=""
 }
 
 make_target() {
