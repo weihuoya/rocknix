@@ -9,11 +9,11 @@ PKG_SITE="https://gitlab.gnome.org/GNOME/libadwaita"
 PKG_URL="https://gitlab.gnome.org/GNOME/libadwaita/-/archive/${PKG_VERSION}/libadwaita-${PKG_VERSION}.tar.bz2"
 PKG_SOURCE_DIR="libadwaita-${PKG_VERSION}"
 PKG_DEPENDS_TARGET="toolchain gtk4 glib"
-PK_LONGDESC="Building blocks for modern GNOME applications."
-PKG_BUILD_FLAGS="-sysroot"
+PKG_LONGDESC="Building blocks for modern GNOME applications."
+KG_BUILD_FLAGS="-sysroot"
 
-PKG_MESON_OPTS_TARGET="-tests=false \
-                       -Dvapi=false \
+PKG_MESON_OPTS_TARGET="-Dtests=false \
+                       -Dcapi=false \
                        -Dintrospection=disabled \
                        -Dgtk_doc=false \
                        -Dexamples=false"
