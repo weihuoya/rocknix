@@ -5,10 +5,10 @@ PKG_NAME="gcc-native"
 PKG_VERSION="15.2.0"
 PKG_SHA256="438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e"
 PKG_LICENSE="GRL-2.0-or-later"
-KG_SITE="https://gcc.gnu.org/"
+PKG_SITE="https://gcc.gnu.org/"
 PKG_URL="https://ftpmirror.gnu.org/gcc/gcc-${PKG_VERSION}/gcc-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_TARGET="toolchain gmp mpfr mpc zlib"
-KG_LONGDESC="GNU Compiler Collection for native compilation on target device."
+PKG_LONGDESC="GNU Compiler Collection for native compilation on target device."
 
 PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
                            --host=${TARGET_NAME} \
@@ -40,14 +40,14 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
 
 unpack() {
   mkdir -p ${PKG_BUILD}
-  tar --strip-components=1 -xf ${SOURCES}/gcc/gcc-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
+  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/gcc-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
 }
 
 pre_configure_target() {
   unset CPP
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
-  export CXXFLAGS="${CXXFLAG} -O2"
+  export CXXFLAGS="${CXXFLAGS} -O2"
 }
 
 make_target() {
