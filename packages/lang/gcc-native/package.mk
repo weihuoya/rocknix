@@ -46,15 +46,24 @@ unpack() {
 pre_configure_target() {
   unset CPP
   unset CPPFLAGS
-  export CFLAGS="${CFLAGS} -O2"
-  export CXXFLAGS="${CXXFLAGS} -O2"
-  export CFLAGS_FOR_BUILD=""
-  export CXXFLAGS_FOR_BUILD=""
-  export LDFLAGS_FOR_BUILD=""
+  # Save original flags
+  export ORIG_CFLAGS="${CFLAGS}"
+  export ORIG_CXXFLAGS="${CXXFLAGS}"
+  # Clear flags for configure to prevent target flags in build tools
+  export CFLAGS=""
+  export CXXFLAGS=""
+}
+
+configure_target() {
+  cd ${PKG_BUILD}
+  mkdir -p .${HOST_NAME}
+  cd .${HOST_NAME}
+  ../configure ${PKG_CONFIGURE_OPTS_TARGET} \
+    --prefix=/usr
 }
 
 make_target() {
-  make -j${CONCURRENCY_MAKE_LEVEL}
+  make CFLAGS="${ORIG_CFLAGS} -O2" CXXFLAGS="${ORIG_CXXFLAGS} -O2" -j${CONCURRENCY_MAKE_LEVEL}
 }
 
 makeinstall_target() {
