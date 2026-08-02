@@ -40,7 +40,7 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
 
 unpack() {
   mkdir -p ${PKG_BUILD}
-  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/gcc-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
+  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
 }
 
 pre_configure_target() {
