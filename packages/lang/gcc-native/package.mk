@@ -40,7 +40,7 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
 
 unpack() {
   mkdir -p ${PKG_BUILD}
-  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz -C ${PKGB_BUILD}
+  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
 }
 
 pre_configure_target() {
@@ -48,9 +48,8 @@ pre_configure_target() {
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
   export CXXFLAGS="${CXXFLAGS} -O2"
-  # Ensure build tools (like libcpp) use host compiler without target flags
   export CFLAGS_FOR_BUILD=""
-  export CXXGLAGS_FOR_BUILD=""
+  export CXXFLAGS_FOR_BUILD=""
   export LDFLAGS_FOR_BUILD=""
 }
 
@@ -63,8 +62,6 @@ makeinstall_target() {
   cp -a ${PKG_BUILD}/.${HOST_NAME}/${TARGET_NAME}/gcc/cc1 ${INSTALL}/usr/ 2>/dev/null || true
   cp -a ${PKG_BUILD}/.${HOST_NAME}/${TARGET_NAME}/gcc/cc1plus ${INSTALL}/usr/ 2>/dev/null || true
   make install DESTDIR=${INSTALL}
-  
-  # Clean up unnecessary files
   rm -rf ${INSTALL}/usr/share/man
   rm -rf ${INSTALL}/usr/share/info
   rm -rf ${INSTALL}/usr/include
