@@ -46,12 +46,14 @@ unpack() {
 pre_configure_target() {
   unset CPP
   unset CPPFLAGS
-  # Save original flags
-  export ORIG_CFLAGS="${CFLAGS}"
-  export ORIG_CXXFLAGS="${CXXFLAGS}"
   # Clear flags for configure to prevent target flags in build tools
   export CFLAGS=""
   export CXXFLAGS=""
+  # Set build compiler flags to empty to avoid target flags
+  export CFLAGS_FOR_BUILD=""
+  export CXXFLAGS_FOR_BUILD=""
+  export CC_FOR_BUILD="gcc"
+  export CXX_FOR_BUILD="g++"
 }
 
 configure_target() {
@@ -63,7 +65,8 @@ configure_target() {
 }
 
 make_target() {
-  make CFLAGS="${ORIG_CFLAGS} -O2" CXXFLAGS="${ORIG_CXXFLAGS} -O2" -j${CONCURRENCY_MAKE_LEVEL}
+  # Use STAGE1_CFLAGS for target compiler, leave CFLAGS empty for build compiler
+  make STAGE1_CFLAGS="-O2" STAGE1_CXXFLAGS="-O2" -j${CONCURRENCY_MAKE_LEVEL}
 }
 
 makeinstall_target() {
