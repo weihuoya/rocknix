@@ -35,6 +35,7 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
                            --disable-libgomp \
                            --disable-libmpx \
                            --disable-libssp \
+                           --disable-libsanitizer \
                            --disable-bootstrap"
 
 unpack() {
