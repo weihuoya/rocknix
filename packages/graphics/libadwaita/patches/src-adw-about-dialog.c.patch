@@ -1,5 +1,5 @@
---- src/adw-about-dialog.c.orig	2026-08-01 23:47:54.665508674 +0800
-+++ src/adw-about-dialog.c	2026-08-01 23:47:59.407516257 +0800
+--- a/src/adw-about-dialog.c
++++ b/src/adw-about-dialog.c
 @@ -7,7 +7,6 @@
  
  #include "config.h"
@@ -16,4 +16,3 @@
 +
    appdata_uri = g_strconcat ("resource://", self->appdata_resource_path, NULL);
    appdata_file = g_file_new_for_uri (appdata_uri);
- 
