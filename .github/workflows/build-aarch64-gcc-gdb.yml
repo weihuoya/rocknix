@@ -23,6 +23,10 @@ jobs:
       DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
       ARCH: aarch64
       DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
     steps:
       - uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
@@ -30,6 +34,13 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-
       - name: Download toolchain
         run: |
           ASSET="toolchain-aarch64-SM8550-2718568bd983a54f.tar.zst"
@@ -39,11 +50,25 @@ jobs:
           cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
           tar --zstd -xf "${ASSET}"
           rm -f "${ASSET}"*
+      - name: Test cross compiler
+        run: |
+          ./scripts/get_env > .env
+          source .env
+          echo "=== Testing cross compiler ==="
+          which aarch64-rocknix-linux-gnu-gcc
+          aarch64-rocknix-linux-gnu-gcc --version
+          echo 'int main() { return 0; }' > /tmp/test.c
+          aarch64-rocknix-linux-gnu-gcc -c /tmp/test.c -o /tmp/test.o
+          file /tmp/test.o
       - name: Build gcc-native and gdb
         run: |
           ./scripts/get_env > .env
           set -e
-          for pkg in gmp mpfr mpc gcc-native gdb; do
+          # Build gmp with cleared CFLAGS to avoid configure test failures
+          echo "=== Building gmp (with CFLAGS cleared) ==="
+          CFLAGS="" CXXFLAGS="" ./scripts/build gmp:target
+          # Build mpfr and mpc normally
+          for pkg in mpfr mpc gcc-native gdb; do
             echo "=== Building $pkg ==="
             ./scripts/build "$pkg":target
           done
@@ -62,3 +87,9 @@ jobs:
             --notes "Native GCC and GDB for ROCKNIX ${{ env.DEVICE }} aarch64." \
             --prerelease || true
           gh release upload "gcc-gdb-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-${{ github.run_id }}-${{ github.run_attempt }}
