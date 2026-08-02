@@ -1,5 +1,5 @@
---- src/meson.build.orig	2026-08-01 23:47:23.111458212 +0800
-+++ src/meson.build	2026-08-01 23:47:31.525471667 +0800
+--- a/src/meson.build
++++ b/src/meson.build
 @@ -332,7 +332,6 @@
    fribidi_dep,
    gio_dep,
@@ -7,4 +7,3 @@
 -  appstream_dep,
    cc.find_library('m', required: false),
  ]
- 
