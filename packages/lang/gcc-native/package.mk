@@ -40,7 +40,7 @@ PKG_CONFIGURE_OPTS_TARGET="--build=${HOST_NAME} \
 
 unpack() {
   mkdir -p ${PKG_BUILD}
-  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz -C ${PKG_BUILD}
+  tar --strip-components=1 -xf ${SOURCES}/${PKG_NAME}/${PKG_NAME}-${PKG_VERSION}.tar.xz -C ${PKGB_BUILD}
 }
 
 pre_configure_target() {
@@ -48,6 +48,10 @@ pre_configure_target() {
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
   export CXXFLAGS="${CXXFLAGS} -O2"
+  # Ensure build tools (like libcpp) use host compiler without target flags
+  export CFLAGS_FOR_BUILD=""
+  export CXXGLAGS_FOR_BUILD=""
+  export LDFLAGS_FOR_BUILD=""
 }
 
 make_target() {
