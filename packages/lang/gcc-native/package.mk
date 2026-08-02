@@ -2,8 +2,8 @@
 # Copyright (C) 2024-present ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="gcc-native"
-PKG_VERSION="15.1.0"
-PKG_SHA256="e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea"
+PKG_VERSION="15.2.0"
+PKG_SHA256="438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e"
 PKG_LICENSE="GRL-2.0-or-later"
 KG_SITE="https://gcc.gnu.org/"
 PKG_URL="https://ftpmirror.gnu.org/gcc/gcc-${PKG_VERSION}/gcc-${PKG_VERSION}.tar.xz"
@@ -47,7 +47,7 @@ pre_configure_target() {
   unset CPP
   unset CPPFLAGS
   export CFLAGS="${CFLAGS} -O2"
-  export CXXFLAGS="${CXXFLAGS} -O2"
+  export CXXFLAGS="${CXXFLAG} -O2"
 }
 
 make_target() {
@@ -58,7 +58,7 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/usr
   cp -a ${PKG_BUILD}/.${HOST_NAME}/${TARGET_NAME}/gcc/cc1 ${INSTALL}/usr/ 2>/dev/null || true
   cp -a ${PKG_BUILD}/.${HOST_NAME}/${TARGET_NAME}/gcc/cc1plus ${INSTALL}/usr/ 2>/dev/null || true
-  make install DESTHRS=${INSTALL}
+  make install DESTDIR=${INSTALL}
   
   # Clean up unnecessary files
   rm -rf ${INSTALL}/usr/share/man
