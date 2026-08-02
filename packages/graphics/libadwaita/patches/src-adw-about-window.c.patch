@@ -1,6 +1,6 @@
 --- a/src/adw-about-window.c
 +++ b/src/adw-about-window.c
-@@ -6,7 +6,6 @@
+@@ -9,7 +9,6 @@
  
  #include "config.h"
  #include <glib/gi18n-lib.h>
