@@ -717,3 +717,121 @@ corrupted double-linked list
 2. 继续观察 H.264 流是否能持续输出，VNC 画面是否正常。
 3. 如果 H.264 工作，说明用 `mmap` 成功绕过堆损坏。但堆损坏的根本原因仍未定位；建议后续使用 `valgrind`、`ASAN` 或 `mprotect` 守卫页进一步追查 `wayvnc` buffer pool / `nvnc_frame` 生命周期中谁污染了 1824 字节 free list。
 4. 如果在新的 `malloc` 位置（例如 `open_h264_context_new` 的 `calloc` 或 `vec_append` 的 `realloc`）再次崩溃，则堆损坏仍在影响其它结构体，需要继续扩大 `mmap` 隔离或追查破坏源。
+
+## 12. qcom-iris 编码器控制与 H.264 画质（2026-08-03）
+
+### 12.1 发现
+
+在 `192.168.31.210` 上启用 H.264 后，VNC 可以连接，但画面明显模糊。日志显示编码帧很小：
+
+```text
+open-h264: creating encoder 2560x1440 format XB24 quality 18
+...
+open-h264: handle_packet start size=12477 pts=18446744073709551615
+```
+
+2560×1440 的 H.264 帧只有 ~12KB，说明编码器走的是低码率/高压缩路径。
+
+### 12.2 控制接口
+
+`qcom-iris` 驱动在 `VIDIOC_S_FMT` 之前**不暴露任何 V4L2 控制**。在设置输出格式（NV12）和捕获格式（H264）之后，驱动会枚举出标准 Codec 控制，包括：
+
+| 控制项 | 默认值 | 说明 |
+|---|---|---|
+| `Video Bitrate Mode` | 0 (VBR) | 码率模式 |
+| `Video Bitrate` | 20000000 (20 Mbps) | 目标码率 |
+| `Video Peak Bitrate` | 20000000 (20 Mbps) | 峰值码率 |
+| `Frame Level Rate Control Enable` | 1 | 帧级码率控制 |
+| `Video GOP Size` | 59 | GOP 长度 |
+| `H264 I-Frame QP Value` | 20 | I 帧 QP |
+| `H264 P-Frame QP Value` | 20 | P 帧 QP |
+| `H264 B-Frame QP Value` | 20 | B 帧 QP |
+| `H264 Minimum QP Value` | 1 | 最小 QP |
+| `H264 Maximum QP Value` | 51 | 最大 QP |
+| `H264 Profile` | 4 (High) | H.264 profile |
+| `H264 Level` | 14 | H.264 level |
+| `H264 Entropy Mode` | 1 (CABAC) | 熵编码模式 |
+
+### 12.3 关键问题
+
+neatvnc 上游的 `v4l2m2m-impl.c` 只设置：
+
+- `V4L2_CID_MPEG_VIDEO_H264_PROFILE`
+- `V4L2_CID_MPEG_VIDEO_H264_I_PERIOD`
+- `V4L2_CID_MPEG_VIDEO_BITRATE_MODE` = `CQ`
+- `V4L2_CID_MPEG_VIDEO_CONSTANT_QUALITY` = quality
+
+在 `qcom-iris` 上：
+
+- `V4L2_CID_MPEG_VIDEO_CONSTANT_QUALITY` **不存在**，`VIDIOC_S_CTRL` 返回 `EINVAL`。
+- `BITRATE_MODE` 只支持 `0=VBR` 和 `1=CBR`，不支持 `2=CQ`。
+
+因此 neatvnc 的设置被驱动忽略，实际走的是默认 VBR 20Mbps + QP20，导致 H.264 画质差。
+
+### 12.4 修改
+
+在 `v4l2m2m-impl.c` 的 `h264_encoder_v4l2m2m_configure()` 中显式设置：
+
+1. `BITRATE_MODE` = `CBR`
+2. `BITRATE` = 50 Mbps
+3. `FRAME_RC_ENABLE` = 1
+4. `H264_MIN_QP` = 1
+5. `H264_MAX_QP` = `quality`（由 open-h264 映射后的 QP）
+6. `H264_I/P/B_FRAME_QP` = `quality`
+7. 保留 `CONSTANT_QUALITY` 作为 fallback
+
+提交：
+
+- `neatvnc`：`weihuoya/neatvnc:master` 的 `087cfc7ec60402803fc13b222bf290d948be8ead`
+- `rocknix`：`weihuoya/rocknix:next`（`projects/ROCKNIX/packages/tools/neatvnc/package.mk`）
+
+### 12.5 验证与清理
+
+#### 12.5.1 第一次构建（含调试代码）
+
+触发 `build-aarch64-wayvnc-deps` 重新构建 `wayvnc-deps-aarch64-SM8550.tar.zst`：
+<https://github.com/weihuoya/rocknix/actions/runs/30824553739>
+
+构建成功，产物包含 `neatvnc` 的 `087cfc7ec60402803fc13b222bf290d948be8ead`（含画质修复，但保留了排查阶段加入的大量 `check_heap`、guard-page 和调试日志）。
+
+#### 12.5.2 清理临时调试代码
+
+在 `/home/weiz/Projects/neatvnc` 中清理：
+
+- 删除 `open-h264.c` 和 `v4l2m2m-impl.c` 中的 `check_heap()` 及所有调用。
+- 删除 `open-h264.c` 中为 `pending` 缓冲区分配的 guard-page（`posix_memalign` + `mprotect`）。
+- 删除 `open_h264_handle_packet()` 中主动释放并重置 `pending` 的临时代码。
+- 删除 `v4l2m2m-impl.c` 中 3 轮 exact-size `malloc/free` 探针。
+- 把 `v4l2m2m` encoder `self` 的分配从 `mmap` 改回 `calloc`（`free` 释放）。
+- 删除大量生命周期调试日志（保留设备扫描、probe 失败/成功、编码帧大小、S_CTRL 结果等关键日志）。
+
+保留的功能性修复：
+
+- NV12 CPU 回退（`libswscale`）。
+- qcom-iris 控制设置：CBR 50 Mbps、Frame RC、H264 MIN/MAX/I/P/B QP。
+- V4L2 缓冲区释放、多平面 DMABUF/MMAP 处理、packed NV12/NV21 双平面描述符。
+- `server.c` 中的 `h264_encoder_v4l2m2m_probe` 和 `NVNC_BUFFER_SIMPLE` 支持。
+- `meson.build` 中的 `libswscale` 依赖。
+
+新提交：
+
+- `neatvnc`：`weihuoya/neatvnc:master` 的 `0cc262e9b6571447bbc12639a23e2f9bf8d9c982`
+- `rocknix`：`weihuoya/rocknix:next` 的 `b39f63db5f`（更新 `projects/ROCKNIX/packages/tools/neatvnc/package.mk`）
+
+#### 12.5.3 第二次构建（干净版本）
+
+触发新的 `build-aarch64-wayvnc-deps`：
+<https://github.com/weihuoya/rocknix/actions/runs/30826138004>
+
+待构建完成后，再触发 `build-aarch64-wayvnc.yml` 重新构建 `wayvnc-3423d09-rocknix-sm8550.tar.gz`（或更新的 wayvnc 提交），确保二进制与 `libneatvnc.so` 来自同一次构建，避免 ABI/符号大小不匹配。
+
+#### 12.5.4 部署检查点
+
+一起部署到 `192.168.31.210` 后，观察日志：
+
+- `v4l2m2m: S_CTRL id=... value=... OK`
+- `open-h264: creating encoder ... quality ...`
+- `v4l2m2m: encoded frame (index ...) size ...`（2560×1440 应达到数十 KB 或更高，而不是 ~12KB）
+- VNC 画面是否不再模糊。
+
+如果新构建的二进制仍出现 `Symbol 'nvnc_version' has different size` 警告或崩溃，需要确认 `wayvnc` 二进制和 `wayvnc-deps` 是否来自同一 workflow/同一 `neatvnc` 提交。
