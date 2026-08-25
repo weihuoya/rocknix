@@ -31,15 +31,17 @@ esac
 
 configure_package() {
   # OpenGLES Support
-  if [ "${OPENGLES_SUPPORT}" = "yes" ]; then
-    PKG_DEPENDS_TARGET+=" ${OPENGLES}"
-  fi
+  PKG_DEPENDS_TARGET+=" ${OPENGLES}"
+
+  # Vulkan Support
+  PKG_DEPENDS_TARGET+=" ${VULKAN} vulkan-headers glslang:host"
 }
+
 # to enable xwayland package: https://gitlab.freedesktop.org/xorg/lib/libxcb-wm/-/tree/master/icccm?ref_type=heads
 PKG_MESON_OPTS_TARGET="-Dxcb-errors=disabled \
                        -Dxwayland=enabled \
                        -Dexamples=false \
-                       -Drenderers=gles2 \
+                       -Drenderers=gles2,vulkan \
                        -Dbackends=drm,libinput"
 
 unpack() {
