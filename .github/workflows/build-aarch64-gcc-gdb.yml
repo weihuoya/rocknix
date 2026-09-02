@@ -1,0 +1,124 @@
+name: Build gcc-gdb for SM8550
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+jobs:
+  build-aarch64-gcc-gdb:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-
+      - name: Download toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"*
+      - name: Build gcc-native and gdb
+        run: |
+          ./scripts/get_env > .env
+          set -e
+          {
+            echo 'set -e'
+            echo 'echo "=== Building gmp (with CFLAGS cleared) ==="'
+            echo 'CFLAGS="" CXXFLAGS="" ./scripts/build gmp:target'
+            echo 'for pkg in mpfr mpc binutils-native gcc-native gdb; do'
+            echo '  echo "=== Building $pkg ==="'
+            echo '  ./scripts/build "$pkg":target'
+            echo 'done'
+          } > build-gcc-gdb.sh
+          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash /work/rocknix/build-gcc-gdb.sh
+          rm -f build-gcc-gdb.sh
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-gcc-gdb)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+      - name: Package gcc-gdb
+        run: |
+          set -e
+          INSTALL_DIR="build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg"
+          SYSROOT_SRC="build.ROCKNIX-${{ env.DEVICE }}.aarch64/toolchain/aarch64-rocknix-linux-gnu/sysroot"
+
+          GCC_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'gcc-native*' | head -n 1)
+          GDB_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'gdb*' | head -n 1)
+          BINUTILS_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'binutils-native*' | head -n 1)
+          [ -n "$GCC_DIR" ] || { echo "ERROR: gcc-native not found"; exit 1; }
+          [ -n "$GDB_DIR" ] || { echo "ERROR: gdb not found"; exit 1; }
+          [ -n "$BINUTILS_DIR" ] || { echo "ERROR: binutils-native not found"; exit 1; }
+          echo "gcc-native: ${GCC_DIR}"
+          echo "gdb: ${GDB_DIR}"
+          echo "binutils-native: ${BINUTILS_DIR}"
+
+          echo "=== Copying target sysroot ==="
+          rm -rf sysroot
+          cp -aL "${SYSROOT_SRC}" sysroot
+          find sysroot -type f -name '*.la' -delete || true
+          du -sh sysroot
+
+          echo "=== Creating package ==="
+          tar --zstd -cf gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst \
+            -C "${INSTALL_DIR}" "$(basename "$GCC_DIR")" "$(basename "$GDB_DIR")" "$(basename "$BINUTILS_DIR")" \
+            -C "${PWD}" sysroot
+          ls -la gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst
+          echo "Package created successfully"
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET="gcc-gdb-aarch64-${{ env.DEVICE }}.tar.zst"
+          gh release create "gcc-gdb-aarch64-${{ env.DEVICE }}" \
+            --title "GCC/GDB for ${{ env.DEVICE }}" \
+            --notes "Native GCC and GDB for ROCKNIX ${{ env.DEVICE }} aarch64.\n\nA complete target sysroot and native binutils are included. Extract and use:\nexport PATH=\$(pwd)/gcc-native-<ver>/usr/bin:\$(pwd)/gdb-<ver>/usr/bin:\$(pwd)/binutils-native-<ver>/usr/bin:\$PATH\nexport LD_LIBRARY_PATH=\$(pwd)/sysroot/usr/lib:\$(pwd)/sysroot/lib:\$LD_LIBRARY_PATH\ngcc --sysroot=\$(pwd)/sysroot hello.c -o hello" \
+            --prerelease || true
+          gh release upload "gcc-gdb-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-gcc-gdb-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
