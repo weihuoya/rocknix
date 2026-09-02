@@ -3,8 +3,8 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="openssh"
-PKG_VERSION="9.8p1"
-PKG_SHA256="dd8bd002a379b5d499dfb050dd1fa9af8029e80461f4bb6c523c49973f5a39f3"
+PKG_VERSION="10.5p1"
+PKG_SHA256="d44d28a839ea9daf969cc69150fde59910b2b39361dad81a3bd6cbd19218db11"
 PKG_LICENSE="OSS"
 PKG_SITE="https://www.openssh.com/"
 PKG_URL="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/${PKG_NAME}-${PKG_VERSION}.tar.gz"
@@ -43,10 +43,6 @@ post_makeinstall_target() {
   if [ ! ${SFTP_SERVER} = "yes" ]; then
     rm -rf ${INSTALL}/usr/lib/openssh/sftp-server
   fi
-  rm -rf ${INSTALL}/usr/bin/ssh-add
-  rm -rf ${INSTALL}/usr/bin/ssh-agent
-  rm -rf ${INSTALL}/usr/bin/ssh-keyscan
-
   sed -e "s|^#PermitRootLogin.*|PermitRootLogin yes|g" \
       -e "s|^#StrictModes.*|StrictModes no|g" \
       -i ${INSTALL}/etc/ssh/sshd_config
