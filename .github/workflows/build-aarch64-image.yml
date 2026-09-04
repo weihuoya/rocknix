@@ -16,10 +16,6 @@ on:
         description: "build nightly version"
         type: string
         required: true
-      OFFICIAL:
-        description: "build official version"
-        type: string
-        required: true
 
 jobs:
   build-aarch64-image:
@@ -30,41 +26,63 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       ARCH: aarch64
-      CACHE_KEY: ccache-aarch64-${{ inputs.DEVICE }}-image-${{ github.sha }}
       DISABLE_COLORS: yes
-      CCACHE_COMPILERCHECK: content
-      CCACHE_COMPRESS: 1
-      CCACHE_COMPRESSLEVEL: 6
-      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
       CHEEVOS_DEV_LOGIN: ${{ secrets.CHEEVOS_DEV_LOGIN }}
       GAMESDB_APIKEY: ${{ secrets.GAMESDB_APIKEY }}
       SCREENSCRAPER_DEV_LOGIN: ${{ secrets.SCREENSCRAPER_DEV_LOGIN }}
       NIGHTLY: ${{ inputs.NIGHTLY }}
-      OFFICIAL: ${{ inputs.OFFICIAL }}
+      ENABLE_32BIT: no
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
     steps:
       - name: Maximize build space
         uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
-          skip-components: docker-engine
+          skip-components: docker-engine,gh-cli
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Download arm (${{ inputs.DEVICE }})
-        if: ${{ inputs.DEVICE != 'SM8650' && inputs.DEVICE != 'SM8750' }}
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-image-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ inputs.DEVICE }}-image-
+            ccache-aarch64-${{ inputs.DEVICE }}-base-
+            ccache-aarch64-${{ inputs.DEVICE }}-emu-standalone-
+            ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro-
+
+      - name: Download aarch64 (${{ inputs.DEVICE }})
         uses: actions/download-artifact@v8
         with:
-          name: arm (${{ inputs.DEVICE }})
+          name: aarch64 (${{ inputs.DEVICE }})
 
-      - name: Extract artifact arm
-        if: ${{ inputs.DEVICE != 'SM8650' && inputs.DEVICE != 'SM8750' }}
+      - name: Extract artifact aarch64
         run: |
-          tar --zstd -xf build.arm.tar.zst
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < aarch64-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
-      - name: Clean up compressed arm file
-        if: ${{ inputs.DEVICE != 'SM8650' && inputs.DEVICE != 'SM8750' }}
-        run: rm build.arm.tar.zst
-        
       - name: Download emu-libretro (${{ inputs.DEVICE }})
         uses: actions/download-artifact@v8
         with:
@@ -72,11 +90,24 @@ jobs:
 
       - name: Extract artifact emu-libretro
         run: |
-          cat build.emu-libretro.tar.part* > build.emu-libretro.tar
-          tar -xf build.emu-libretro.tar
-
-      - name: Clean up compressed emu-libretro file
-        run: rm build.emu-libretro.tar*
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/emu-libretro-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < emu-libretro-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Download emu-standalone (${{ inputs.DEVICE }})
         uses: actions/download-artifact@v8
@@ -85,31 +116,51 @@ jobs:
 
       - name: Extract artifact emu-standalone
         run: |
-          cat build.emu-standalone.tar.part* > build.emu-standalone.tar
-          tar --skip-old-files -xf build.emu-standalone.tar
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/emu-standalone-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < emu-standalone-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
-      - name: Clean up compressed emu-standalone file
-        run: rm build.emu-standalone.tar*
-
-      # clean to rebuild retroarch with 32bit enabled
-      - name: Clean retroarch
+      # clean to rebuild emulators and emulationstation with credentials / latest artifacts
+      - name: Clean emulators and emulationstation
         run: |
           ./scripts/get_env > .env
-          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-            bash -c "./scripts/clean retroarch"
-      # clean to rebuild emulationstation with credentials
-      - name: Clean emulationstation
-        run: |
-          ./scripts/get_env > .env
-          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-            bash -c "./scripts/clean emulationstation"
+          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+            bash -c "./scripts/clean emulators && ./scripts/clean emulationstation"
 
       - name: build
+        env:
+          DIRTY: yes
         run: |
           ./scripts/get_env > .env
+          # Heartbeat: keep GitHub from killing us during long silent builds
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
           set -e
-          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
             bash -c "./scripts/build_distro"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
           exit_code=$(<docker_exit_code)
           exit $exit_code
 
@@ -125,20 +176,39 @@ jobs:
       - name: Get date
         run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ROCKNIX-image-${{ inputs.DEVICE }}-${{ env.DATE }}
-          path: |
-            target/ROCKNIX-*.img.gz
-            target/ROCKNIX-*.img.gz.sha256
-          compression-level: 0
-          if-no-files-found: error
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
 
-      - uses: actions/upload-artifact@v7
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
         with:
-          name: ROCKNIX-update-${{ inputs.DEVICE }}-${{ env.DATE }}
-          path: |
-            target/ROCKNIX-*.tar
-            target/ROCKNIX-*.tar.sha256
-          compression-level: 0
-          if-no-files-found: error
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-image-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Print space
+        run: df -h
+
+      - name: Upload image to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" target/ROCKNIX-*.img.gz target/ROCKNIX-*.img.gz.sha256 --clobber --repo ${{ github.repository }}
+
+      - name: Upload update to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" target/ROCKNIX-*.tar target/ROCKNIX-*.tar.sha256 --clobber --repo ${{ github.repository }}
