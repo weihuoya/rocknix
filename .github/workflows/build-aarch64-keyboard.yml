@@ -1,0 +1,165 @@
+name: Build keyboard for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      keyboard_repo:
+        description: 'keyboard repository to build'
+        required: true
+        default: 'weihuoya/rocknix-keyboard'
+      keyboard_ref:
+        description: 'keyboard branch/tag/commit'
+        required: true
+        default: 'main'
+
+jobs:
+  build-aarch64-keyboard:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      SCCACHE_VERSION: v0.10.0
+      SCCACHE_DIR: /work/rocknix/.sccache-cache
+      # Fixed release assets - update these when the upstream cache changes
+      TOOLCHAIN_ASSET_BASE: toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst
+      RUST_ASSET: rust-aarch64-SM8550-1.98.0.tar.zst
+      KEYBOARD_DEPS_ASSET: deps-aarch64-SM8550.tar.zst
+      CARGO_REGISTRY_ASSET: cargo-aarch64-SM8550.tar.zst
+      CACHE_RELEASE_TAG: ashell-aarch64-SM8550
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Checkout keyboard
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.inputs.keyboard_repo }}
+          ref: ${{ github.event.inputs.keyboard_ref }}
+          path: keyboard
+          fetch-depth: 1
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.TOOLCHAIN_ASSET_BASE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract fixed rust
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/rust-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.RUST_ASSET }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract fixed keyboard-deps cache
+        run: |
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/${{ env.CACHE_RELEASE_TAG }}"
+          ASSET="${{ env.KEYBOARD_DEPS_ASSET }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract cargo registry cache
+        run: |
+          mkdir -p .cargo-cache
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/${{ env.CACHE_RELEASE_TAG }}"
+          ASSET="${{ env.CARGO_REGISTRY_ASSET }}"
+          if curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"; then
+            tar --zstd -xf "${ASSET}" -C .
+            rm -f "${ASSET}"
+            echo "Cargo registry cache downloaded and extracted."
+          else
+            rm -f "${ASSET}"
+            echo "No cargo registry cache found, will download crates during build."
+          fi
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+        with:
+          version: ${{ env.SCCACHE_VERSION }}
+
+      - name: Copy sccache to workspace
+        run: |
+          mkdir -p .sccache
+          cp "${SCCACHE_PATH}" .sccache/sccache
+          chmod +x .sccache/sccache
+          ./.sccache/sccache --version
+
+      - name: Build keyboard
+        run: |
+          ./scripts/get_env > .env
+          echo 'ROCKNIX_KEYBOARD_SOURCE_DIR=/work/keyboard' >> .env
+          echo 'RUSTC_WRAPPER=/work/rocknix/.sccache/sccache' >> .env
+          echo 'SCCACHE_DIR=${{ env.SCCACHE_DIR }}' >> .env
+          echo 'SCCACHE_GHA_ENABLED=true' >> .env
+          echo 'CARGO_HOME_OVERRIDE=/work/rocknix/.cargo-cache' >> .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -v ${PWD}/keyboard:/work/keyboard -v ${PWD}/.sccache:/work/rocknix/.sccache -v ${PWD}/.sccache-cache:/work/rocknix/.sccache-cache -v ${PWD}/.cargo-cache:/work/rocknix/.cargo-cache -w /work/rocknix -e PWD=/work/rocknix -e SCCACHE_GHA_ENABLED -e ACTIONS_CACHE_URL -e ACTIONS_RUNTIME_TOKEN "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build keyboard-gpui:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-keyboard-fast)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Show sccache stats
+        if: always()
+        run: |
+          export SCCACHE_DIR="${PWD}/.sccache-cache"
+          ./.sccache/sccache --show-stats || true
+
+      - name: Package keyboard
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          KEYBOARD_VERSION="$(cd keyboard && git describe --tags --always 2>/dev/null || echo ${VERSION})"
+          STAGE="keyboard-${KEYBOARD_VERSION}-rocknix-SM8550"
+          mkdir -p "${STAGE}"
+          KEYBOARD_BIN=$(find "build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg" -name rocknix-keyboard -type f | head -n1)
+          cp "${KEYBOARD_BIN}" "${STAGE}/"
+          tar -czf "${STAGE}.tar.gz" "${STAGE}"
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload keyboard to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ env.CACHE_RELEASE_TAG }}" --title "ashell for ${{ env.DEVICE }}" --notes "Cross-compiled ashell and dependency cache for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "${{ env.CACHE_RELEASE_TAG }}" "${{ env.ASSET }}" --clobber
+
+      - name: Package and upload cargo registry cache
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar --zstd -cf "${{ env.CARGO_REGISTRY_ASSET }}" .cargo-cache
+          gh release create "${{ env.CACHE_RELEASE_TAG }}" --title "ashell for ${{ env.DEVICE }}" --notes "Cross-compiled ashell and dependency cache for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "${{ env.CACHE_RELEASE_TAG }}" "${{ env.CARGO_REGISTRY_ASSET }}" --clobber

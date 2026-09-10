@@ -1,0 +1,263 @@
+name: Build agentsight for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      agentsight_repo:
+        description: 'agentsight repository to build'
+        required: true
+        default: 'weihuoya/agentsight'
+      agentsight_ref:
+        description: 'agentsight branch/tag/commit'
+        required: true
+        default: 'master'
+
+jobs:
+  build-aarch64-agentsight:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      SCCACHE_VERSION: v0.10.0
+      SCCACHE_DIR: /work/rocknix/.sccache-cache
+      # Fixed release assets - update these when the upstream cache changes
+      TOOLCHAIN_ASSET_BASE: toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst
+      RUST_ASSET: rust-aarch64-SM8550-1.98.0.tar.zst
+      CARGO_REGISTRY_ASSET: cargo-aarch64-SM8550.tar.zst
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Checkout agentsight
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.inputs.agentsight_repo }}
+          ref: ${{ github.event.inputs.agentsight_ref }}
+          path: agentsight
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set agentsight version
+        id: agentsight_version
+        run: |
+          VERSION="$(cd agentsight && git describe --tags --always 2>/dev/null || echo dev)"
+          echo "AGENTSIGHT_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "agentsight version: ${VERSION}"
+
+      - name: Cache Rust target directories
+        uses: actions/cache@v4
+        with:
+          path: |
+            agentsight/ext/vis/target
+            agentsight/collector/target
+            agentsight/ext/pprof/target
+          key: agentsight-target-${{ env.AGENTSIGHT_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            agentsight-target-${{ env.AGENTSIGHT_VERSION }}-
+            agentsight-target-
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libelf-dev zlib1g-dev libclang-dev \
+            make git clang llvm pkg-config build-essential
+
+      - name: Install bpftool
+        run: |
+          if ! sudo apt-get install -y --no-install-recommends bpftool; then
+            sudo apt-get install -y --no-install-recommends linux-tools-common linux-tools-generic
+            BPFTOOL_BIN="$(ls /usr/lib/linux-tools-*/bpftool 2>/dev/null | head -n1)"
+            sudo ln -sf "${BPFTOOL_BIN}" /usr/local/bin/bpftool
+          fi
+          which bpftool
+          bpftool --version
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Build frontend assets
+        run: |
+          set -e
+          cd agentsight/frontend
+          npm install
+          npm run build
+          cd ../ext/vis/web
+          npm ci
+          npm run build
+
+      - name: Vendor frontend assets into source tree
+        run: |
+          set -e
+          cd agentsight
+          mkdir -p collector/vendor/frontend/dist
+          cp -a frontend/dist/. collector/vendor/frontend/dist/
+          mkdir -p ext/vis/vendor/vis
+          cp ext/vis/web/dist/repository-nebula.iife.js ext/vis/vendor/vis/
+
+      - name: Clean agentsight source tree for build
+        run: |
+          rm -rf agentsight/.git
+          rm -f agentsight/libbpf/.git agentsight/bpftool/.git
+          rm -rf agentsight/frontend/node_modules agentsight/ext/vis/web/node_modules
+
+      - name: Build eBPF objects and skeletons on host
+        run: |
+          set -e
+          BPFTOOL="$(which bpftool)"
+          cd agentsight/bpf
+          make ARCH=arm64 \
+               CLANG=clang \
+               CROSS_COMPILE= \
+               CC=clang \
+               BPFTOOL="${BPFTOOL}" \
+               BASH_READLINE_SEC='"uretprobe//lib/libreadline.so.8:readline"' \
+               -j$(nproc) \
+               .output/process.bpf.o \
+               .output/sslsniff.bpf.o \
+               .output/stdiocap.bpf.o \
+               .output/process.skel.h \
+               .output/sslsniff.skel.h \
+               .output/stdiocap.skel.h
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.TOOLCHAIN_ASSET_BASE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract fixed rust
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/rust-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.RUST_ASSET }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract cargo registry cache
+        run: |
+          mkdir -p .cargo-cache
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/agentsight-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.CARGO_REGISTRY_ASSET }}"
+          if curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"; then
+            tar --zstd -xf "${ASSET}" -C .
+            rm -f "${ASSET}"
+            echo "Cargo registry cache downloaded and extracted."
+          else
+            rm -f "${ASSET}"
+            echo "No cargo registry cache found, will download crates during build."
+          fi
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+        with:
+          version: ${{ env.SCCACHE_VERSION }}
+
+      - name: Copy sccache to workspace
+        run: |
+          mkdir -p .sccache
+          cp "${SCCACHE_PATH}" .sccache/sccache
+          chmod +x .sccache/sccache
+          ./.sccache/sccache --version
+
+      - name: Build agentsight
+        run: |
+          ./scripts/get_env > .env
+          echo 'AGENTSIGHT_SOURCE_DIR=/work/rocknix/agentsight' >> .env
+          echo 'CARGO_HOME_OVERRIDE=/work/rocknix/.cargo-cache' >> .env
+          echo 'RUSTC_WRAPPER=/work/rocknix/.sccache/sccache' >> .env
+          echo 'SCCACHE_DIR=${{ env.SCCACHE_DIR }}' >> .env
+          echo 'SCCACHE_GHA_ENABLED=true' >> .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) \
+            -v ${PWD}:/work/rocknix \
+            -v ${PWD}/agentsight:/work/rocknix/agentsight \
+            -v ${PWD}/.sccache:/work/rocknix/.sccache \
+            -v ${PWD}/.sccache-cache:/work/rocknix/.sccache-cache \
+            -v ${PWD}/.cargo-cache:/work/rocknix/.cargo-cache \
+            -w /work/rocknix \
+            -e PWD=/work/rocknix \
+            -e SCCACHE_GHA_ENABLED \
+            -e ACTIONS_CACHE_URL \
+            -e ACTIONS_RUNTIME_TOKEN \
+            "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build agentsight:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-agentsight-fast)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Show sccache stats
+        if: always()
+        run: |
+          export SCCACHE_DIR="${PWD}/.sccache-cache"
+          ./.sccache/sccache --show-stats || true
+
+      - name: Package agentsight
+        run: |
+          STAGE="agentsight-rocknix-${{ env.DEVICE }}"
+          mkdir -p "${STAGE}"
+          for bin in agentsight agentvis agentpprof; do
+            SRC=$(find "build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg" -name "${bin}" -type f | head -n1)
+            if [ -z "${SRC}" ]; then
+              echo "error: ${bin} not found in install_pkg"
+              exit 1
+            fi
+            cp "${SRC}" "${STAGE}/"
+          done
+          tar -czf "${STAGE}.tar.gz" "${STAGE}"
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "agentsight-aarch64-${{ env.DEVICE }}" \
+            --title "agentsight for ${{ env.DEVICE }}" \
+            --notes "Cross-compiled agentsight for ROCKNIX ${{ env.DEVICE }}." \
+            --prerelease || true
+          gh release upload "agentsight-aarch64-${{ env.DEVICE }}" "${{ env.ASSET }}" --clobber
+
+      - name: Package and upload cargo registry cache
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar --zstd -cf "${{ env.CARGO_REGISTRY_ASSET }}" .cargo-cache
+          gh release create "agentsight-aarch64-${{ env.DEVICE }}" \
+            --title "agentsight for ${{ env.DEVICE }}" \
+            --notes "Cross-compiled agentsight for ROCKNIX ${{ env.DEVICE }}." \
+            --prerelease || true
+          gh release upload "agentsight-aarch64-${{ env.DEVICE }}" "${{ env.CARGO_REGISTRY_ASSET }}" --clobber

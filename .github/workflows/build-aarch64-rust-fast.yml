@@ -1,0 +1,149 @@
+name: Build aarch64 rust for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      PROJECT:
+        required: true
+        type: string
+        default: ROCKNIX
+      DEVICE:
+        required: true
+        type: string
+        default: SM8550
+      OWNER_LC:
+        required: true
+        type: string
+        default: rocknix
+
+jobs:
+  build-aarch64-rust-fast:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      AUTOREMOVE: "yes"
+      PROJECT: ${{ inputs.PROJECT }}
+      DEVICE: ${{ inputs.DEVICE }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      # Fixed release assets - update these when the upstream cache changes
+      TOOLCHAIN_ASSET_BASE: toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Get rust version
+        id: rust_version
+        run: |
+          if [ -f "projects/${{ inputs.PROJECT }}/packages/rust/rust/package.mk" ]; then
+            RUST_PKG="projects/${{ inputs.PROJECT }}/packages/rust/rust/package.mk"
+          else
+            RUST_PKG="packages/rust/rust/package.mk"
+          fi
+          RUST_VERSION=$(grep '^PKG_VERSION=' "${RUST_PKG}" | head -1 | cut -d'"' -f2)
+          echo "version=${RUST_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-rust-fast-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ inputs.DEVICE }}-rust-fast-
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          ASSET="${{ env.TOOLCHAIN_ASSET_BASE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Build cargo:host
+        run: |
+          ./scripts/get_env > .env
+          # Heartbeat: keep GitHub from killing us during long silent builds
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+            bash -c "./scripts/build_mt cargo:host"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-rust-fast)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ inputs.DEVICE }}-aarch64-rust-fast)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-rust-fast-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Compress directory
+        run: |
+          tar --zstd --exclude='./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/build' --exclude='./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache' -cf build.rust.tar.zst \
+          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/
+
+      - name: Upload prebuilt rust
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          ASSET="rust-aarch64-${{ inputs.DEVICE }}-${{ steps.rust_version.outputs.version }}.tar.zst"
+          mv build.rust.tar.zst "${ASSET}"
+          gh release create "rust-aarch64-${{ inputs.DEVICE }}" --title "Rust cache for ${{ inputs.DEVICE }}" --notes "Auto-generated rust cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "rust-aarch64-${{ inputs.DEVICE }}" "${ASSET}" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
