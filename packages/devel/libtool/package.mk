@@ -7,18 +7,32 @@ PKG_VERSION="2.6.2"
 PKG_SHA256="2ef1067c16c97db930fd740cc9bc3d3ba9a583804ae5ac42cc3e8719e49e191e"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://www.gnu.org/software/libtool/"
-PKG_URL="https://ftpmirror.gnu.org/libtool/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_URL="https://ftp.gnu.org/gnu/libtool/${PKG_NAME}-${PKG_VERSION}.tar.xz"
 PKG_DEPENDS_HOST="ccache:host autoconf:host automake:host intltool:host"
 PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="A generic library support script."
-PKG_TOOLCHAIN="autotools"
+PKG_TOOLCHAIN="configure"
 
 PKG_CONFIGURE_OPTS_HOST="--enable-static \
                          --disable-shared"
 
 post_unpack() {
   chmod u+w ${PKG_BUILD}/build-aux/ltmain.sh
+
+  # autoconf 2.73 is stricter about LT_LANG languages.
+  # libtool 2.6.2 does not support many of the languages listed.
+  if [ -f "${PKG_BUILD}/configure.ac" ]; then
+    sed -i '/LT_LANG(Objective-C)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Objective-C++)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Microsoft Macro Assembler)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Fortran 77)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Fortran)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Go)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Java)/d' ${PKG_BUILD}/configure.ac
+    sed -i '/LT_LANG(Windows Resource)/d' ${PKG_BUILD}/configure.ac
+  fi
 }
+
 
 pre_make_host() {
   # do not rebuild man, or txt pages
