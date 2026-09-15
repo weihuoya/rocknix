@@ -61,7 +61,7 @@
 		pins = "gpio25";
 		function = "gpio";
 		drive-strength = <8>;
-		bias-disable;
+		bias-pull-up;
 		input-enable;
 	};
 
@@ -69,8 +69,8 @@
 		pins = "gpio24";
 		function = "gpio";
 		drive-strength = <8>;
-		input-enable;
-		bias-pull-down;
+		bias-disable;
+		output-high;
 	};
 };
 
@@ -130,7 +130,9 @@
 		interrupt-parent = <&tlmm>;
 		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
 
-		reset-gpios = <&tlmm 24 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&tlmm 25 GPIO_ACTIVE_HIGH>;
+		/* goodix.c drives reset as logical 0=assert/1=release; keep logical == physical */
+		reset-gpios = <&tlmm 24 GPIO_ACTIVE_HIGH>;
 		VDDIO-supply = <&vreg_l14b_3p2>;
 		AVDD28-supply = <&vreg_l14b_3p2>;
 
