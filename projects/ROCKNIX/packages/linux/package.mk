@@ -27,11 +27,11 @@ case ${DEVICE} in
     PKG_PATCH_DIRS="${LINUX} ${DEVICE} default"
     ;;
   H700|SM6115|SM8250|SM8550|SM8650|SM8750)
-    PKG_VERSION="7.2.2"
-    PKG_SHA256="7d0e7ce14f98c43efe880cffbf354a59be45928fdf7170d7333c374ae91c0d83"
+    PKG_VERSION="7.2.5"
+    PKG_SHA256="55ddf0df8325d9dad96fcff7bd93977d22e3f50af06527572af59b77c7632b78"
     PKG_URL="https://www.kernel.org/pub/linux/kernel/v${PKG_VERSION/.*/}.x/${PKG_NAME}-${PKG_VERSION}.tar.xz"
     # The versioned patch dir (patches/7.2) is only auto-added when it matches
-    # PKG_VERSION exactly, so with 7.2.2 it must be listed explicitly.
+    # PKG_VERSION exactly, so with 7.2.5 it must be listed explicitly.
     PKG_PATCH_DIRS+=" 7.2"
     ;;
   RK3326|AMD64)

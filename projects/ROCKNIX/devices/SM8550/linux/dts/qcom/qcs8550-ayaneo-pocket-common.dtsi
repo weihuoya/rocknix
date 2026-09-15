@@ -561,6 +561,10 @@
 			regulator-min-microvolt = <2720000>;
 			regulator-max-microvolt = <3960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
 		};
 
 		vreg_l2b_3p0: ldo2 {
@@ -1378,7 +1382,7 @@
 };
 
 &pcieport0 {
-	wake-gpios = <&tlmm 96 GPIO_ACTIVE_HIGH>;
+	wake-gpios = <&tlmm 96 GPIO_ACTIVE_LOW>;
 	reset-gpios = <&tlmm 94 GPIO_ACTIVE_LOW>;
 
 	wifi@0 {
@@ -1412,7 +1416,7 @@
 };
 
 &pcie1_port0 {
-	wake-gpios = <&tlmm 99 GPIO_ACTIVE_HIGH>;
+	wake-gpios = <&tlmm 99 GPIO_ACTIVE_LOW>;
 	reset-gpios = <&tlmm 97 GPIO_ACTIVE_LOW>;
 
 	/* Renesas μPD720201 PCIe USB3.0 HOST CONTROLLER */
@@ -1474,8 +1478,8 @@
 };
 
 &usb_dp_qmpphy {
-	vdda-phy-supply = <&vreg_l3e_1p2>;
-	vdda-pll-supply = <&vreg_l3f_0p88>;
+	vdda-phy-supply = <&vreg_l3f_0p88>;
+	vdda-pll-supply = <&vreg_l3e_1p2>;
 
 	mode-switch;
 
