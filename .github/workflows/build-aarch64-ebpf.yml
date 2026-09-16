@@ -141,8 +141,9 @@ jobs:
             --prefix=/opt/rust --disable-ldconfig --components=rustc,cargo,rust-std-aarch64-unknown-linux-gnu
           export PATH=/opt/rust/bin:$PATH
 
-          # bpf-linker(aya):llvm-19 feature,动态链 staging 里的官方 LLVM
-          export LLVM_SYS_190_PREFIX=/staging/llvm
+          # bpf-linker(aya):llvm-19 feature → llvm-sys 191,动态链 staging 里的官方 LLVM
+          export PATH=/staging/llvm/bin:$PATH
+          export LLVM_SYS_191_PREFIX=/staging/llvm
           cargo install bpf-linker --locked --version "${{ env.BPF_LINKER_VERSION }}" \
             --no-default-features --features llvm-19 --root /staging/bpf-linker
           /staging/bpf-linker/bin/bpf-linker --version
@@ -240,7 +241,7 @@ jobs:
           export PATH="${ROCKDASH_EBPF}/llvm/bin:${ROCKDASH_EBPF}/bpf-linker/bin:${ROCKDASH_EBPF}/bpftool/bin:${ROCKDASH_EBPF}/rust-nightly/bin:${PATH}"
           # bpf-linker 动态链 libLLVM;bpftool 运行库由其包装器自带,不入全局
           export LD_LIBRARY_PATH="${ROCKDASH_EBPF}/llvm/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-          export LLVM_SYS_190_PREFIX="${ROCKDASH_EBPF}/llvm"
+          export LLVM_SYS_191_PREFIX="${ROCKDASH_EBPF}/llvm"
           EOF
           sed -i 's/^          //' staging/env.sh
           du -sh staging/*
