@@ -266,8 +266,25 @@ jobs:
           EOF
           sed -i 's/^          //' staging/env.sh
           du -sh staging/*
-          # 剔除 LLVM 静态库(~1.5GB):bpf-linker 动态链 libLLVM,C 路线只需 clang/llc
-          tar --zstd --exclude='./llvm/lib/*.a' -cf ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst -C staging .
+          # LLVM 官方包 7.5GB,设备侧只需一小部分:
+          #  - bin 白名单(clang/llc/opt/llvm-* 常用工具 + llvm-config)
+          #  - lib 只留动态运行库(libLLVM/libclang-cpp/libLTO)+ clang 资源头,剔除静态库与 libclang C API
+          #  - include 保留(llvm-sys 与 clang 编译需要)
+          #  - share/man/cmake 等剔除
+          pushd staging/llvm
+          mkdir bin-keep
+          for b in clang clang-19 clang++ clang-cpp llc opt \
+                   llvm-strip llvm-objdump llvm-objcopy llvm-readelf llvm-readobj llvm-nm \
+                   llvm-config ld.lld llvm-mc llvm-dis llvm-as llvm-ar llvm-ranlib llvm-dwarfdump; do
+            [ -e "bin/${b}" ] && mv "bin/${b}" bin-keep/
+          done
+          rm -rf bin && mv bin-keep bin
+          rm -rf share lib/cmake lib/scanbuild lib/scan-view lib/*.a
+          rm -f lib/libclang.so* lib/libclang.so
+          popd
+          echo "LLVM trimmed: $(du -sh staging/llvm | cut -f1)"
+          du -sh staging/*
+          tar --zstd -cf ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst -C staging .
           SIZE=$(stat -c%s ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst)
           echo "package size: $((SIZE / 1024 / 1024)) MiB"
           [ "${SIZE}" -lt 2000000000 ] || { echo "ERROR: package exceeds GitHub release 2GB limit" >&2; exit 1; }
