@@ -227,12 +227,19 @@ jobs:
       - name: Collect libbpf dev files
         if: steps.hit.outputs.hit != 'true'
         run: |
-          SRC=$(ls -d build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/libbpf-* | head -1)
-          [ -d "${SRC}/usr" ] || { echo "ERROR: libbpf install tree not found" >&2; exit 1; }
-          mkdir -p staging/libbpf
-          cp -a "${SRC}/usr" staging/libbpf/usr
+          # libbpf 的 makeinstall 装进交叉 sysroot(PREFIX=${SYSROOT_PREFIX}/usr),
+          # 不走 install_pkg,故从 toolchain sysroot 收集
+          SYSROOT_USR="build.ROCKNIX-${{ env.DEVICE }}.aarch64/toolchain/aarch64-rocknix-linux-gnu/sysroot/usr"
+          [ -f "${SYSROOT_USR}/lib/libbpf.a" ] || { echo "ERROR: libbpf.a not found in sysroot" >&2; exit 1; }
+          mkdir -p staging/libbpf/usr/include staging/libbpf/usr/lib/pkgconfig
+          cp -a "${SYSROOT_USR}/include/bpf" staging/libbpf/usr/include/
+          cp -a "${SYSROOT_USR}/lib/libbpf.a" staging/libbpf/usr/lib/
+          if [ -f "${SYSROOT_USR}/lib/pkgconfig/libbpf.pc" ]; then
+            sed 's|^prefix=.*|prefix=/usr|' "${SYSROOT_USR}/lib/pkgconfig/libbpf.pc" \
+              > staging/libbpf/usr/lib/pkgconfig/libbpf.pc
+          fi
           ls staging/libbpf/usr/include/bpf/ | head
-          ls staging/libbpf/usr/lib/ | grep -i bpf
+          ls -la staging/libbpf/usr/lib/libbpf.a
 
       - name: Archive output.logs on failure
         if: failure() && steps.hit.outputs.hit != 'true'
