@@ -1,0 +1,265 @@
+name: Build eBPF toolchain for SM8550
+
+# 设备端通用 eBPF 工具链(rust/aya + C/libbpf 两条路线)。
+# 产物 ebpf-toolchain-aarch64-SM8550.tar.zst 发到 release ebpf-aarch64-SM8550,
+# 设备解包到 /storage/games-external/devtools/ebpf/ 即可在设备上开发/构建/调试 eBPF。
+#
+# 组件来源:
+#   llvm/          官方 clang+llvm-19.1.7-aarch64-linux-gnu 预编译包(自带 BPF target;
+#                  20/21/23 官方未发 aarch64-linux 包,19.1.7 是最新可用;剔除静态库 .a 瘦身)
+#   rust-nightly/  rust nightly + rust-src(bpfel-unknown-none 需要 build-std=core)
+#   bpf-linker/    aya 链接器 0.9.15(llvm-19 feature;0.10+ 已弃 llvm-19),
+#                  qemu arm64 容器内对着上面的 LLVM 构建
+#   bpftool/       libbpf/bpftool v7.7.0,qemu arm64 容器原生编译 + ldd 依赖打包
+#   libbpf/usr/    packages/devel/libbpf 1.7.0,rocknix docker 交叉构建(头文件+静态库)
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: 'ROCKNIX device to build for'
+        required: false
+        type: string
+        default: 'SM8550'
+  push:
+    branches: [next]
+    paths:
+      - '.github/workflows/build-aarch64-ebpf.yml'
+
+env:
+  JAVA_HOME: /usr
+  PROJECT: ROCKNIX
+  DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+  ARCH: aarch64
+  DISABLE_COLORS: yes
+  # ---- 版本 pin ----
+  LLVM_VERSION: 19.1.7
+  # 官方未发布 sha256;首次运行打印后回填此处即启用校验
+  LLVM_SHA256: ""
+  RUST_NIGHTLY_DATE: "2026-09-14"
+  RUST_STABLE_VERSION: "1.98.0"
+  RUST_STABLE_SHA256: "ac9283184301aeed06ecc9f5aa4c1be7041e18a1b197b6cb6c5d162d98f566da"
+  BPF_LINKER_VERSION: "0.9.15"
+  BPFTOOL_VERSION: "v7.7.0"
+  TOOLCHAIN_ASSET_BASE: toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst
+
+jobs:
+  build-aarch64-ebpf:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Compute ebpf toolchain key
+        id: key
+        run: |
+          KEY=$(sha256sum .github/workflows/build-aarch64-ebpf.yml | cut -c1-16)
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Check prebuilt ebpf toolchain
+        id: hit
+        run: |
+          URL="https://github.com/weihuoya/rocknix/releases/download/ebpf-aarch64-${{ env.DEVICE }}/ebpf-key.txt"
+          if curl -L --fail --silent --show-error "${URL}" -o ebpf-key-remote.txt && \
+             [ "$(cat ebpf-key-remote.txt)" = "${{ steps.key.outputs.key }}" ]; then
+            echo "hit=true" >> $GITHUB_OUTPUT
+            echo "Prebuilt ebpf toolchain is up to date, nothing to do."
+          else
+            echo "hit=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download LLVM ${{ env.LLVM_VERSION }} aarch64 (official prebuilt, BPF target included)
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          ASSET="clang+llvm-${{ env.LLVM_VERSION }}-aarch64-linux-gnu.tar.xz"
+          curl -L --fail --retry 3 --silent --show-error \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/${ASSET}" -o "${ASSET}"
+          ACTUAL=$(sha256sum "${ASSET}" | cut -d' ' -f1)
+          echo "LLVM sha256: ${ACTUAL}"
+          if [ -n "${{ env.LLVM_SHA256 }}" ] && [ "${ACTUAL}" != "${{ env.LLVM_SHA256 }}" ]; then
+            echo "ERROR: LLVM sha256 mismatch" >&2
+            exit 1
+          fi
+          mkdir -p staging/llvm
+          # 完整解包(静态库供容器内 bpf-linker 构建兜底,打包时再剔除)
+          tar -xJf "${ASSET}" -C staging/llvm --strip-components=1
+          rm -f "${ASSET}"
+          echo "LLVM extracted: $(du -sh staging/llvm | cut -f1)"
+
+      - name: Download rust nightly (${{ env.RUST_NIGHTLY_DATE }}) + rust-src
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          set -e
+          BASE="https://static.rust-lang.org/dist/${{ env.RUST_NIGHTLY_DATE }}"
+          for f in rust-nightly-aarch64-unknown-linux-gnu.tar.xz rust-src-nightly.tar.xz; do
+            curl -L --fail --retry 3 --silent --show-error "${BASE}/${f}" -o "${f}"
+            curl -L --fail --retry 3 --silent --show-error "${BASE}/${f}.sha256" -o "${f}.sha256"
+            sha256sum -c "${f}.sha256"
+          done
+          mkdir -p staging/rust-nightly rust-extract
+          tar -xJf rust-nightly-aarch64-unknown-linux-gnu.tar.xz -C rust-extract
+          rust-extract/rust-nightly-aarch64-unknown-linux-gnu/install.sh \
+            --prefix="${PWD}/staging/rust-nightly" --disable-ldconfig
+          tar -xJf rust-src-nightly.tar.xz -C rust-extract
+          rust-extract/rust-src-nightly/install.sh \
+            --prefix="${PWD}/staging/rust-nightly" --disable-ldconfig
+          rm -rf rust-extract rust-nightly-aarch64-unknown-linux-gnu.tar.xz rust-src-nightly.tar.xz *.sha256
+
+      - name: Setup QEMU for arm64 container builds
+        if: steps.hit.outputs.hit != 'true'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Build bpf-linker + bpftool (qemu arm64 container)
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          cat > build-ebpf-tools.sh <<'INNER'
+          #!/bin/bash
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            build-essential pkg-config curl ca-certificates xz-utils git \
+            libelf-dev zlib1g-dev libcap-dev binutils-dev
+
+          # rust stable(仅用于构建 bpf-linker 这个宿主二进制)
+          RUST_TARBALL="rust-${{ env.RUST_STABLE_VERSION }}-aarch64-unknown-linux-gnu.tar.xz"
+          curl -fL --retry 3 -sS "https://static.rust-lang.org/dist/${RUST_TARBALL}" -o "${RUST_TARBALL}"
+          echo "${{ env.RUST_STABLE_SHA256 }}  ${RUST_TARBALL}" | sha256sum -c -
+          tar -xJf "${RUST_TARBALL}"
+          "./rust-${{ env.RUST_STABLE_VERSION }}-aarch64-unknown-linux-gnu/install.sh" \
+            --prefix=/opt/rust --disable-ldconfig --components=rustc,cargo,rust-std-aarch64-unknown-linux-gnu
+          export PATH=/opt/rust/bin:$PATH
+
+          # bpf-linker(aya):llvm-19 feature,动态链 staging 里的官方 LLVM
+          export LLVM_SYS_190_PREFIX=/staging/llvm
+          cargo install bpf-linker --locked --version "${{ env.BPF_LINKER_VERSION }}" \
+            --no-default-features --features llvm-19 --root /staging/bpf-linker
+          /staging/bpf-linker/bin/bpf-linker --version
+
+          # bpftool:原生编译(qemu 容器 host==target,bootstrap 无交叉问题)
+          git clone --depth 1 --branch "${{ env.BPFTOOL_VERSION }}" --recurse-submodules \
+            https://github.com/libbpf/bpftool /tmp/bpftool
+          make -C /tmp/bpftool/src -j"$(nproc)"
+          mkdir -p /staging/bpftool/bin /staging/bpftool/lib
+          cp /tmp/bpftool/src/bpftool /staging/bpftool/bin/bpftool.real
+
+          # ldd 依赖打包:设备 rootfs 未必有 libelf/libcap/libbfd
+          for lib in $(ldd /staging/bpftool/bin/bpftool.real | awk '/=> \//{print $3}'); do
+            case "${lib}" in
+              */libc.so*|*/ld-linux*) ;;  # 设备 glibc 2.41 自带
+              *) cp -L "${lib}" /staging/bpftool/lib/ ;;
+            esac
+          done
+          cat > /staging/bpftool/bin/bpftool <<'WRAP'
+          #!/bin/sh
+          # 由 build-aarch64-ebpf.yml 生成:bpftool 重定位包装器(自带运行库)
+          HERE=$(cd "$(dirname "$0")/.." && pwd)
+          export LD_LIBRARY_PATH="${HERE}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          exec "${HERE}/bin/bpftool.real" "$@"
+          WRAP
+          chmod +x /staging/bpftool/bin/bpftool
+          /staging/bpftool/bin/bpftool version
+          INNER
+          sed -i 's/^          //' build-ebpf-tools.sh
+          chmod +x build-ebpf-tools.sh
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          docker run --init --rm --platform linux/arm64 \
+            -v "${PWD}/staging:/staging" \
+            -v "${PWD}/build-ebpf-tools.sh:/build-ebpf-tools.sh:ro" \
+            ubuntu:24.04 bash /build-ebpf-tools.sh
+          kill ${HEARTBEAT_PID} 2>/dev/null || true
+
+      - name: Download and extract fixed aarch64-toolchain
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          ASSET="${{ env.TOOLCHAIN_ASSET_BASE }}"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-${{ env.DEVICE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Build libbpf (rocknix cross docker)
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          ./scripts/get_env > .env
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build libbpf:target"; echo $? > docker_exit_code; } 2>&1 | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Collect libbpf dev files
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          SRC=$(ls -d build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/libbpf-* | head -1)
+          [ -d "${SRC}/usr" ] || { echo "ERROR: libbpf install tree not found" >&2; exit 1; }
+          mkdir -p staging/libbpf
+          cp -a "${SRC}/usr" staging/libbpf/usr
+          ls staging/libbpf/usr/include/bpf/ | head
+          ls staging/libbpf/usr/lib/ | grep -i bpf
+
+      - name: Archive output.logs on failure
+        if: failure() && steps.hit.outputs.hit != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-ebpf)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Write env.sh and package
+        if: steps.hit.outputs.hit != 'true'
+        run: |
+          cat > staging/env.sh <<'EOF'
+          #!/bin/bash
+          # 由 build-aarch64-ebpf.yml 生成,勿手改
+          # 设备端通用 eBPF 工具链环境:source 后 Rust(aya)与 C(libbpf/CO-RE)均可用
+          export ROCKDASH_EBPF="${ROCKDASH_EBPF:-/storage/games-external/devtools/ebpf}"
+          export PATH="${ROCKDASH_EBPF}/llvm/bin:${ROCKDASH_EBPF}/bpf-linker/bin:${ROCKDASH_EBPF}/bpftool/bin:${ROCKDASH_EBPF}/rust-nightly/bin:${PATH}"
+          # bpf-linker 动态链 libLLVM;bpftool 运行库由其包装器自带,不入全局
+          export LD_LIBRARY_PATH="${ROCKDASH_EBPF}/llvm/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          export LLVM_SYS_190_PREFIX="${ROCKDASH_EBPF}/llvm"
+          EOF
+          sed -i 's/^          //' staging/env.sh
+          du -sh staging/*
+          # 剔除 LLVM 静态库(~1.5GB):bpf-linker 动态链 libLLVM,C 路线只需 clang/llc
+          tar --zstd --exclude='./llvm/lib/*.a' -cf ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst -C staging .
+          SIZE=$(stat -c%s ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst)
+          echo "package size: $((SIZE / 1024 / 1024)) MiB"
+          [ "${SIZE}" -lt 2000000000 ] || { echo "ERROR: package exceeds GitHub release 2GB limit" >&2; exit 1; }
+
+      - name: Upload to release
+        if: steps.hit.outputs.hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="ebpf-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" \
+            --title "eBPF toolchain for ${{ env.DEVICE }}" \
+            --notes "Device-side eBPF toolchain: clang/LLVM ${{ env.LLVM_VERSION }} (BPF target), rust nightly ${{ env.RUST_NIGHTLY_DATE }} + rust-src, bpf-linker ${{ env.BPF_LINKER_VERSION }}, bpftool ${{ env.BPFTOOL_VERSION }}, libbpf dev. Unpack to /storage/games-external/devtools/ebpf/ and source env.sh." \
+            --prerelease || true
+          gh release upload "${RELEASE_TAG}" "ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst" --clobber
+          echo "${{ steps.key.outputs.key }}" > ebpf-key.txt
+          gh release upload "${RELEASE_TAG}" ebpf-key.txt --clobber
