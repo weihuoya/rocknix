@@ -130,7 +130,8 @@ jobs:
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends \
             build-essential pkg-config curl ca-certificates xz-utils git \
-            libelf-dev zlib1g-dev libcap-dev binutils-dev
+            libelf-dev zlib1g-dev libcap-dev binutils-dev \
+            libxml2-dev libzstd-dev libedit-dev libffi-dev
 
           # rust stable(仅用于构建 bpf-linker 这个宿主二进制)
           RUST_TARBALL="rust-${{ env.RUST_STABLE_VERSION }}-aarch64-unknown-linux-gnu.tar.xz"
@@ -171,6 +172,18 @@ jobs:
           WRAP
           chmod +x /staging/bpftool/bin/bpftool
           /staging/bpftool/bin/bpftool version
+
+          # LLVM 运行库打包:设备 rootfs 缺 libxml2/libedit/libffi 等
+          # (libLLVM/clang 的运行时依赖),按 ldd 闭包拷贝,排除设备自带的系统库
+          mkdir -p /staging/llvm/libfix
+          for lib in $(ldd /staging/llvm/bin/clang /staging/llvm/lib/libLLVM*.so* 2>/dev/null | awk '/=> \//{print $3}' | sort -u); do
+            case "${lib}" in
+              */libc.so*|*/ld-linux*|*/libm.so*|*/libdl.so*|*/librt.so*|*/libpthread.so*|\
+              */libz.so*|*/libzstd.so*|*/libgcc_s.so*|*/libstdc++.so*) ;;  # 设备自带
+              *) cp -L "${lib}" /staging/llvm/libfix/ ;;
+            esac
+          done
+          ls /staging/llvm/libfix/
           INNER
           sed -i 's/^          //' build-ebpf-tools.sh
           chmod +x build-ebpf-tools.sh
@@ -239,8 +252,9 @@ jobs:
           # 设备端通用 eBPF 工具链环境:source 后 Rust(aya)与 C(libbpf/CO-RE)均可用
           export ROCKDASH_EBPF="${ROCKDASH_EBPF:-/storage/games-external/devtools/ebpf}"
           export PATH="${ROCKDASH_EBPF}/llvm/bin:${ROCKDASH_EBPF}/bpf-linker/bin:${ROCKDASH_EBPF}/bpftool/bin:${ROCKDASH_EBPF}/rust-nightly/bin:${PATH}"
-          # bpf-linker 动态链 libLLVM;bpftool 运行库由其包装器自带,不入全局
-          export LD_LIBRARY_PATH="${ROCKDASH_EBPF}/llvm/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          # bpf-linker 动态链 libLLVM;libfix 是设备缺失的 LLVM 运行时库(libxml2/libedit/libffi 等);
+          # bpftool 运行库由其包装器自带,不入全局
+          export LD_LIBRARY_PATH="${ROCKDASH_EBPF}/llvm/lib:${ROCKDASH_EBPF}/llvm/libfix${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
           export LLVM_SYS_191_PREFIX="${ROCKDASH_EBPF}/llvm"
           EOF
           sed -i 's/^          //' staging/env.sh
