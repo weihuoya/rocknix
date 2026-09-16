@@ -131,7 +131,7 @@ jobs:
           apt-get install -y -qq --no-install-recommends \
             build-essential pkg-config curl ca-certificates xz-utils git \
             libelf-dev zlib1g-dev libcap-dev binutils-dev \
-            libxml2-dev libzstd-dev libedit-dev libffi-dev
+            libxml2-dev libzstd-dev libedit-dev libffi-dev libssl-dev
 
           # rust stable(仅用于构建 bpf-linker 这个宿主二进制)
           RUST_TARBALL="rust-${{ env.RUST_STABLE_VERSION }}-aarch64-unknown-linux-gnu.tar.xz"
