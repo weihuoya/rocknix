@@ -1,0 +1,97 @@
+name: Build eBPF toolchain for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: 'ROCKNIX device to build for'
+        required: false
+        type: string
+        default: 'SM8550'
+  push:
+    branches: [next]
+    paths:
+      - '.github/workflows/build-aarch64-ebpf.yml'
+
+env:
+  JAVA_HOME: /usr
+  PROJECT: ROCKNIX
+  DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+  ARCH: aarch64
+  DISABLE_COLORS: yes
+  BPFTOOL_VERSION: "v7.7.0"
+
+jobs:
+  build-aarch64-ebpf:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup QEMU for arm64 container builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Build bpftool (qemu arm64 container)
+        run: |
+          cat > build-bpftool.sh <<'INNER'
+          #!/bin/bash
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            build-essential pkg-config curl ca-certificates git \
+            libelf-dev zlib1g-dev libcap-dev binutils-dev libssl-dev
+
+          # bpftool:原生编译(qemu 容器 host==target,bootstrap 无交叉问题)
+          git clone --depth 1 --branch "${{ env.BPFTOOL_VERSION }}" --recurse-submodules \
+            https://github.com/libbpf/bpftool /tmp/bpftool
+          make -C /tmp/bpftool/src -j"$(nproc)"
+          mkdir -p /staging/bpftool/bin /staging/bpftool/lib
+          cp /tmp/bpftool/src/bpftool /staging/bpftool/bin/bpftool.real
+
+          # ldd 依赖打包:设备 rootfs 未必有 libelf/libcap/libbfd/libcrypto
+          for lib in $(ldd /staging/bpftool/bin/bpftool.real | awk '/=> \//{print $3}'); do
+            case "${lib}" in
+              */libc.so*|*/ld-linux*|*/libz.so*|*/libzstd.so*|*/libgcc_s.so*) ;;  # 设备自带
+              *) cp -L "${lib}" /staging/bpftool/lib/ ;;
+            esac
+          done
+          cat > /staging/bpftool/bin/bpftool <<'WRAP'
+          #!/bin/sh
+          # 由 build-aarch64-ebpf.yml 生成:bpftool 重定位包装器(自带运行库)
+          HERE=$(cd "$(dirname "$0")/.." && pwd)
+          export LD_LIBRARY_PATH="${HERE}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          exec "${HERE}/bin/bpftool.real" "$@"
+          WRAP
+          chmod +x /staging/bpftool/bin/bpftool
+          /staging/bpftool/bin/bpftool version
+          INNER
+          sed -i 's/^          //' build-bpftool.sh
+          chmod +x build-bpftool.sh
+          mkdir -p staging
+          docker run --init --rm --platform linux/arm64 \
+            -v "${PWD}/staging:/staging" \
+            -v "${PWD}/build-bpftool.sh:/build-bpftool.sh:ro" \
+            ubuntu:24.04 bash /build-bpftool.sh
+
+      - name: Package
+        run: |
+          du -sh staging/*
+          tar --zstd -cf ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst -C staging .
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="ebpf-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" \
+            --title "eBPF toolchain for ${{ env.DEVICE }}" \
+            --notes "Device-side eBPF debug tool: bpftool ${{ env.BPFTOOL_VERSION }} (self-contained)." \
+            --prerelease || true
+          gh release upload "${RELEASE_TAG}" "ebpf-toolchain-aarch64-${{ env.DEVICE }}.tar.zst" --clobber
