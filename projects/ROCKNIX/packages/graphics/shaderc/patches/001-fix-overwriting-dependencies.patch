@@ -1,16 +1,3 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index bd6b890f10..7535f532f4 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -120,7 +120,7 @@ endif(MSVC)
- 
- # Configure subdirectories.
- # We depend on these for later projects, so they should come first.
--add_subdirectory(third_party)
-+#add_subdirectory(third_party)
- 
- add_subdirectory(libshaderc_util)
- add_subdirectory(libshaderc)
 diff --git a/glslc/CMakeLists.txt b/glslc/CMakeLists.txt
 index 1277d87e73..058a1e8121 100644
 --- a/glslc/CMakeLists.txt
@@ -24,3 +11,8 @@ index 1277d87e73..058a1e8121 100644
  endif(SHADERC_ENABLE_EXECUTABLES)
  
  shaderc_add_tests(
+@@ -73,4 +73,3 @@ if(SHADERC_ENABLE_INSTALL)
+     BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR})
+ endif(SHADERC_ENABLE_INSTALL)
+ 
+-add_subdirectory(test)
