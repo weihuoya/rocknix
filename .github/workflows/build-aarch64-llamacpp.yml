@@ -162,5 +162,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RELEASE_TAG="llamacpp-aarch64-${{ env.DEVICE }}"
-          gh release create "${RELEASE_TAG}" --title "llama.cpp for ${{ env.DEVICE }}" --notes "llama.cpp 最新 master 交叉构建(aarch64-linux glibc),启用 Hexagon(HTP skel v73/v75/v79/v81)+ Vulkan 双后端,已打 htp-svs-corner 补丁。部署:tar 解到设备 /storage/games-external/opt/llamahex/(顶层为 llama.cpp/ 目录),布放 lib/libggml-htp-v73.so 到 /usr/lib/dsp/cdsp/ 后运行,详见 rocknpu 仓库 llamacpp-hexagon/README.md。" --prerelease || true
-          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber
+          gh release create "${RELEASE_TAG}" --repo "${{ github.repository }}" --title "llama.cpp for ${{ env.DEVICE }}" --notes "llama.cpp 最新 master 交叉构建(aarch64-linux glibc),启用 Hexagon(HTP skel v73/v75/v79/v81)+ Vulkan 双后端,已打 htp-svs-corner 补丁。部署:tar 解到设备 /storage/games-external/opt/llamahex/(顶层为 llama.cpp/ 目录),布放 lib/libggml-htp-v73.so 到 /usr/lib/dsp/cdsp/ 后运行,详见 rocknpu 仓库 llamacpp-hexagon/README.md。" --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber --repo "${{ github.repository }}"
