@@ -21,11 +21,8 @@
 /delete-node/ &mpss_dsm_mem;
 /delete-node/ &mpss_mem;
 /delete-node/ &q6_mpss_dtb_mem;
-/delete-node/ &cdsp_mem;
-/delete-node/ &q6_cdsp_dtb_mem;
 
 /delete-node/ &remoteproc_mpss;
-/delete-node/ &remoteproc_cdsp;
 
 / {
 	chassis-type = "handset";
@@ -1514,4 +1511,25 @@
 
 &iris {
 	status = "okay";
+};
+
+/* CDSP/NPU:换用完整版固件(ayn cdsp.mbn = CDSP.HT.2.8-00906-KAILUA-1) */
+&remoteproc_cdsp {
+	firmware-name = "qcom/sm8550/ayn/cdsp.mbn",
+			"qcom/sm8550/ayn/cdsp_dtb.mbn";
+	status = "okay";
+};
+
+/ {
+	reserved-memory {
+		cdsp_fastrpc_heap: cdsp-fastrpc-heap@8a800000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x8a800000 0x0 0x2000000>;
+			reusable;
+		};
+	};
+};
+
+&{/soc@0/remoteproc@32300000/glink-edge/fastrpc} {
+	memory-region = <&cdsp_fastrpc_heap>;
 };

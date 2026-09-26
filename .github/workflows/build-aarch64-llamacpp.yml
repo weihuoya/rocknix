@@ -1,0 +1,166 @@
+name: Build llama.cpp for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: 'ROCKNIX device to build for'
+        required: false
+        type: string
+        default: 'SM8550'
+      REF:
+        description: 'llama.cpp branch or tag to build'
+        required: false
+        type: string
+        default: 'master'
+  workflow_call:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+      REF:
+        required: false
+        type: string
+        default: 'master'
+
+jobs:
+  build-aarch64-llamacpp:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      REF: ${{ inputs.REF || 'master' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - name: Clone llama.cpp
+        run: |
+          git clone --depth 1 --branch "${REF}" https://github.com/ggml-org/llama.cpp.git llama.cpp
+          git -C llama.cpp rev-parse --short HEAD
+
+      # 上游 skel 把 HTP 电压角锁 VCORNER_MAX,SM8550 满载会触发 PMIC 级整机复位;
+      # 此补丁降为 SVS,是本机唯一稳定档。打不上必须 fail,不能放出未打补丁的构建。
+      - name: Apply htp-svs-corner patch
+        run: |
+          cat > /tmp/htp-svs-corner.patch <<'EOF'
+          diff --git a/ggml/src/ggml-hexagon/htp/main.c b/ggml/src/ggml-hexagon/htp/main.c
+          index b4b352b..830d8aa 100644
+          --- a/ggml/src/ggml-hexagon/htp/main.c
+          +++ b/ggml/src/ggml-hexagon/htp/main.c
+          @@ -501,13 +501,13 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
+                   request.dcvs_v3.set_dcvs_enable           = TRUE;
+                   request.dcvs_v3.dcvs_enable               = FALSE;
+                   request.dcvs_v3.set_bus_params            = TRUE;
+          -        request.dcvs_v3.bus_params.min_corner     = HAP_DCVS_VCORNER_MAX;
+          -        request.dcvs_v3.bus_params.max_corner     = HAP_DCVS_VCORNER_MAX;
+          -        request.dcvs_v3.bus_params.target_corner  = HAP_DCVS_VCORNER_MAX;
+          +        request.dcvs_v3.bus_params.min_corner     = HAP_DCVS_VCORNER_SVS;
+          +        request.dcvs_v3.bus_params.max_corner     = HAP_DCVS_VCORNER_SVS;
+          +        request.dcvs_v3.bus_params.target_corner  = HAP_DCVS_VCORNER_SVS;
+                   request.dcvs_v3.set_core_params           = TRUE;
+          -        request.dcvs_v3.core_params.min_corner    = HAP_DCVS_VCORNER_MAX;
+          -        request.dcvs_v3.core_params.max_corner    = HAP_DCVS_VCORNER_MAX;
+          -        request.dcvs_v3.core_params.target_corner = HAP_DCVS_VCORNER_MAX;
+          +        request.dcvs_v3.core_params.min_corner    = HAP_DCVS_VCORNER_SVS;
+          +        request.dcvs_v3.core_params.max_corner    = HAP_DCVS_VCORNER_SVS;
+          +        request.dcvs_v3.core_params.target_corner = HAP_DCVS_VCORNER_SVS;
+                   request.dcvs_v3.set_sleep_disable         = TRUE;
+                   request.dcvs_v3.sleep_disable             = TRUE;
+           
+          @@ -537,9 +537,9 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
+                   request.hmx_v2.set_power     = TRUE;
+                   request.hmx_v2.power_up      = TRUE;
+                   request.hmx_v2.set_clock     = TRUE;
+          -        request.hmx_v2.target_corner = HAP_DCVS_EXP_VCORNER_MAX;
+          -        request.hmx_v2.min_corner    = HAP_DCVS_EXP_VCORNER_MAX;
+          -        request.hmx_v2.max_corner    = HAP_DCVS_EXP_VCORNER_MAX;
+          +        request.hmx_v2.target_corner = HAP_DCVS_EXP_VCORNER_SVS;
+          +        request.hmx_v2.min_corner    = HAP_DCVS_EXP_VCORNER_SVS;
+          +        request.hmx_v2.max_corner    = HAP_DCVS_EXP_VCORNER_SVS;
+                   request.hmx_v2.perf_mode     = HAP_CLK_PERF_HIGH;
+                   FARF(ALWAYS, "Setting HMX clock\n");
+                   err = HAP_power_set((void *) ctx, &request);
+          EOF
+          cd llama.cpp
+          git apply --check /tmp/htp-svs-corner.patch || {
+            echo "ERROR: htp-svs-corner.patch 无法套用到 ${REF}。未打补丁的 skel 会把 HTP 锁 MAX corner,SM8550 满载直接整机复位,构建中止。请按上游 main.c 更新补丁内容。"
+            exit 1
+          }
+          git apply /tmp/htp-svs-corner.patch
+          grep -c "HAP_DCVS_VCORNER_SVS" ggml/src/ggml-hexagon/htp/main.c
+
+      # 在上游 snapdragon presets 基础上追加 arm64-linux-snapdragon-vulkan-release
+      # (继承 release,GGML_HEXAGON 继承为 ON,追加 GGML_VULKAN=ON + aarch64 链接件路径)
+      - name: Generate CMakeUserPresets.json with Vulkan preset
+        run: |
+          python3 - <<'EOF'
+          import json
+          p = json.load(open('llama.cpp/docs/backend/snapdragon/CMakeUserPresets.json'))
+          p['configurePresets'] = [x for x in p['configurePresets'] if x.get('name') != 'arm64-linux-snapdragon-vulkan-release']
+          p['configurePresets'].append({
+              "name": "arm64-linux-snapdragon-vulkan-release",
+              "inherits": ["arm64-linux-snapdragon-release"],
+              "cacheVariables": {
+                  "GGML_VULKAN": "ON",
+                  "Vulkan_LIBRARY": "/opt/vulkan-aarch64/lib/libvulkan.so"
+              }
+          })
+          json.dump(p, open('llama.cpp/CMakeUserPresets.json', 'w'), indent=4)
+          EOF
+
+      # 官方工具链镜像(NDK + Hexagon SDK)不带 Vulkan 构建依赖;衍生层补 glslc/
+      # spirv-headers/libvulkan-dev,并用 multiarch 的 libvulkan1:arm64 作为交叉链接件
+      # (直接链接会错链镜像内 amd64 loader)
+      - name: Build v0.7-vk toolchain image
+        run: |
+          mkdir vkbuild
+          cat > vkbuild/Dockerfile <<'EOF'
+          FROM ghcr.io/snapdragon-toolchain/arm64-linux:v0.7
+          RUN dpkg --add-architecture arm64 \
+           && apt-get update -qq \
+           && apt-get install -y --no-install-recommends glslc spirv-headers libvulkan-dev \
+           && cd /tmp \
+           && apt-get download libvulkan1:arm64 \
+           && dpkg -x libvulkan1_*_arm64.deb /tmp/vk \
+           && mkdir -p /opt/vulkan-aarch64/lib \
+           && cp -a /tmp/vk/usr/lib/aarch64-linux-gnu/libvulkan.so.1* /opt/vulkan-aarch64/lib/ \
+           && ln -sf libvulkan.so.1 /opt/vulkan-aarch64/lib/libvulkan.so \
+           && rm -rf /var/lib/apt/lists/* /tmp/libvulkan1_*_arm64.deb /tmp/vk
+          EOF
+          docker build -t ghcr.io/snapdragon-toolchain/arm64-linux:v0.7-vk vkbuild
+
+      - name: Build llama.cpp (Hexagon + Vulkan)
+        run: |
+          cd llama.cpp
+          python3 scripts/snapdragon/build.py --target lnx -j"$(nproc)" \
+            --preset arm64-linux-snapdragon-vulkan-release \
+            --toolchain-version v0.7-vk
+
+      - name: Package llama.cpp
+        run: |
+          cd llama.cpp
+          SHA=$(git rev-parse --short HEAD)
+          for f in bin/llama-server bin/llama-cli bin/test-backend-ops \
+                   lib/libggml-hexagon.so lib/libggml-htp-v73.so lib/libggml-vulkan.so; do
+            [ -e "pkg-lnx/llama.cpp/$f" ] || { echo "ERROR: 缺产物 pkg-lnx/llama.cpp/$f,检查构建日志"; exit 1; }
+          done
+          STAGE="llamacpp-${{ env.DEVICE }}-${SHA}"
+          tar -czf "${STAGE}.tar.gz" -C pkg-lnx llama.cpp
+          ls -lh "${STAGE}.tar.gz"
+          echo "ASSET=llama.cpp/${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload llama.cpp to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="llamacpp-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --repo "${{ github.repository }}" --title "llama.cpp for ${{ env.DEVICE }}" --notes "llama.cpp (Hexagon + Vulkan)" --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber --repo "${{ github.repository }}"
