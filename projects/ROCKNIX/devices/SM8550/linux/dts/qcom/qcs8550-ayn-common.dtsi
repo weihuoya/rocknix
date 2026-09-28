@@ -22,8 +22,11 @@
 /delete-node/ &mpss_dsm_mem;
 /delete-node/ &mpss_mem;
 /delete-node/ &q6_mpss_dtb_mem;
+/delete-node/ &cdsp_mem;
+/delete-node/ &q6_cdsp_dtb_mem;
 
 /delete-node/ &remoteproc_mpss;
+/delete-node/ &remoteproc_cdsp;
 
 / {
 	chassis-type = "handset";
@@ -598,6 +601,10 @@
 			regulator-min-microvolt = <2720000>;
 			regulator-max-microvolt = <3960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
 		};
 
 		vreg_l2b_3p0: ldo2 {
@@ -705,6 +712,11 @@
 			regulator-allow-set-load;
 			regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
 						   RPMH_REGULATOR_MODE_HPM>;
+
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-mode = <RPMH_REGULATOR_MODE_LPM>;
+			};
 		};
 
 		vreg_l16b_2p8: ldo16 {
@@ -1096,7 +1108,7 @@
 };
 
 &pcieport0 {
-	wake-gpios = <&tlmm 96 GPIO_ACTIVE_HIGH>;
+	wake-gpios = <&tlmm 96 GPIO_ACTIVE_LOW>;
 	reset-gpios = <&tlmm 94 GPIO_ACTIVE_LOW>;
 
 	wifi@0 {
@@ -1444,12 +1456,6 @@
 	status = "okay";
 };
 
-&remoteproc_cdsp {
-	firmware-name = "qcom/sm8550/ayn/cdsp.mbn",
-			"qcom/sm8550/ayn/cdsp_dtb.mbn";
-	status = "okay";
-};
-
 &sdhc_2 {
 	cd-gpios = <&pm8550_gpios 12 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default", "sleep";
@@ -1750,8 +1756,8 @@
 };
 
 &usb_dp_qmpphy {
-	vdda-phy-supply = <&vreg_l3e_1p2>;
-	vdda-pll-supply = <&vreg_l3f_0p88>;
+	vdda-phy-supply = <&vreg_l3f_0p88>;
+	vdda-pll-supply = <&vreg_l3e_1p2>;
 
 	mode-switch;
 

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       actions: write
-      contents: read
+      contents: write
     env:
       EMULATION_DEVICE: no
       ENABLE_32BIT: no
@@ -28,7 +28,6 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       ARCH: aarch64
-      CACHE_KEY: ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro-${{ github.sha }}
       DISABLE_COLORS: yes
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: 1
@@ -38,92 +37,147 @@ jobs:
       - name: Maximize build space
         uses: justinthelaw/maximize-github-runner-space@v0.9.0
         with:
-          skip-components: docker-engine
+          skip-components: docker-engine,gh-cli
 
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Retrieve ccache
+      - name: Compute emu-libretro key
+        id: emu_libretro_key
         run: |
-          URL="https://github.com/${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}/releases/download/ccache/ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro.tar"
-          curl -L --fail --silent --show-error "$URL" | tar -xvf - || echo "Cache archive not found, skipping."  
+          KEY=$(find projects/ROCKNIX/packages/virtual/emulators projects/ROCKNIX/packages/emulators/libretro -type f | sort | xargs cat | sha256sum | cut -d' ' -f1 | cut -c1-16)
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Retrieve prebuilt emu-libretro
+        id: emu_libretro_hit
+        run: |
+          ASSET="emu-libretro-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_libretro_key.outputs.key }}.tar.zst"
+          URL="https://github.com/weihuoya/rocknix/releases/download/emu-libretro-aarch64-${{ inputs.DEVICE }}/${ASSET}"
+          if curl -L --fail --silent --show-error "$URL" -o "$ASSET"; then
+            tar --zstd -xf "$ASSET"
+            rm -f "$ASSET"
+            echo "hit=true" >> $GITHUB_OUTPUT
+            echo "Prebuilt emu-libretro downloaded and extracted."
+          else
+            echo "hit=false" >> $GITHUB_OUTPUT
+            echo "Prebuilt emu-libretro not found, will build from source."
+          fi
+
+      - name: Restore ccache
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro-
 
       - name: Download aarch64 (${{ inputs.DEVICE }})
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: aarch64 (${{ inputs.DEVICE }})
 
       - name: Extract artifact aarch64
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            tar -xf build.aarch64.tar
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed aarch64 file
-        run: rm build.aarch64.tar
-
-      - name: Download build aarch64 (${{ inputs.DEVICE }})
-        uses: actions/download-artifact@v8
-        with:
-          name: aarch64 build (${{ inputs.DEVICE }})
-
-      - name: Extract artifact aarch64 build
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            tar -xf build.build.aarch64.tar
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed aarch64 file
-        run: rm build.build.aarch64.tar
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < aarch64-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Download qt6 (${{ inputs.DEVICE }})
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' || inputs.DEVICE == 'S922X' || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' }}
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: qt6 (${{ inputs.DEVICE }})
 
       - name: Extract artifact qt6
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' || inputs.DEVICE == 'S922X' || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' }}
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            sudo tar --zstd -xf build.qt6.tar.zst --same-owner
-          max_attempts: 3
-          retry_interval: 10
-
-      - name: Clean up compressed qt6 file
-        if: ${{ inputs.DEVICE == 'RK3399' || inputs.DEVICE == 'RK3566' || inputs.DEVICE == 'RK3576' || inputs.DEVICE == 'RK3588' || inputs.DEVICE == 'S922X' || inputs.DEVICE == 'SM8250' || inputs.DEVICE == 'SM8550' }}
-        run: rm build.qt6.tar.zst
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/qt6-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < qt6-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Download mame-lr (${{ inputs.DEVICE }})
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
         uses: actions/download-artifact@v8
         with:
           name: mame-lr (${{ inputs.DEVICE }})
 
       - name: Extract artifact mame-lr
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
         run: |
-          tar --zstd -xf build.mame-lr.tar.zst
-
-      - name: Clean up compressed mame-lr file
-        run: rm build.mame-lr.tar.zst
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/mame-lr-aarch64-${{ inputs.DEVICE }}"
+          PARTS=()
+          while IFS= read -r fname; do
+            [ -n "$fname" ] || continue
+            curl -L --fail --silent --show-error "${URL_BASE}/${fname}" -o "${fname}"
+            PARTS+=("$fname")
+          done < mame-lr-key.txt
+          if [ ${#PARTS[@]} -eq 1 ]; then
+            ASSET="${PARTS[0]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          else
+            ASSET="${PARTS[0]%.aa}"
+            cat "${PARTS[@]}" > "${ASSET}"
+            rm -f "${PARTS[@]}"
+            tar --zstd -xf "${ASSET}"
+            rm -f "${ASSET}"
+          fi
 
       - name: Build
-        uses: corrupt952/actions-retry-command@v1.0.7
-        with:
-          command: |
-            ./scripts/get_env > .env
-            set -e
-            { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-              bash -c "./scripts/build_mt emulators"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
-            exit_code=$(<docker_exit_code)
-            exit $exit_code
-          max_attempts: 6
-          retry_interval: 10
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        run: |
+          ./scripts/get_env > .env
+          # Heartbeat: keep GitHub from killing us during long silent builds
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
+            bash -c "./scripts/build_mt emulators"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
 
       - name: Archive output.logs (${{ inputs.DEVICE }}-aarch64-emu-libretro)
         if: failure()
@@ -135,41 +189,60 @@ jobs:
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
 
       - name: Clean ccache
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
         run: |
           export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -M 2G
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -c
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -z
-
-      - name: Tar ccache
-        run: |
-          tar -cf ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro.tar ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache 
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
 
       - name: Save ccache
-        uses: softprops/action-gh-release@v3
+        if: always() && steps.emu_libretro_hit.outputs.hit != 'true'
+        uses: actions/cache/save@v5
         with:
-          tag_name: ccache
-          files: ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro.tar
-          make_latest: true
-          prerelease: true
-          body: ccache
-          token: ${{ secrets.GH_PAT }}
-          repository: ${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}
-        continue-on-error: true
+          path: build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ inputs.DEVICE }}-emu-libretro-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Print space
         run: df -h
 
       - name: Compress directory
-        run: | 
-          sudo tar --remove-files -cf - \
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        run: |
+          tar --zstd -cf build.emu-libretro.tar.zst \
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/install_* \
-          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.stamps | split -b 2G -  build.emu-libretro.tar.part
+          ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.stamps
 
+      - name: Upload cache key
+        run: |
+          echo "emu-libretro-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_libretro_key.outputs.key }}.tar.zst" > emu-libretro-key.txt
       - uses: actions/upload-artifact@v7
         with:
           name: emu-libretro (${{ inputs.DEVICE }})
-          path: build.emu-libretro.tar.part*
+          path: emu-libretro-key.txt
           if-no-files-found: error
+
+      - name: Upload prebuilt emu-libretro
+        if: steps.emu_libretro_hit.outputs.hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          ASSET="emu-libretro-aarch64-${{ inputs.DEVICE }}-${{ steps.emu_libretro_key.outputs.key }}.tar.zst"
+          mv build.emu-libretro.tar.zst "${ASSET}"
+          gh release create "emu-libretro-aarch64-${{ inputs.DEVICE }}" --title "Emu-libretro cache for ${{ inputs.DEVICE }}" --notes "Auto-generated emu-libretro cache" --prerelease --repo weihuoya/rocknix || true
+          gh release upload "emu-libretro-aarch64-${{ inputs.DEVICE }}" "${ASSET}" --clobber --repo weihuoya/rocknix || echo "Upload failed: ${ASSET}, continuing..."
+
+      - name: Upload new sources to mirror
+        if: always() && steps.emu_libretro_hit.outputs.hit != 'true'
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.CACHE_REPO_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
