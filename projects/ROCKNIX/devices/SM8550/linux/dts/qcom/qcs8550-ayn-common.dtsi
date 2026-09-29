@@ -54,7 +54,6 @@
 			gpios = <&pm8550_gpios 6 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_VOLUMEUP>;
 			linux,can-disable;
-			wakeup-source;
 		};
 	};
 
@@ -594,6 +593,11 @@
 			regulator-min-microvolt = <3296000>;
 			regulator-max-microvolt = <3960000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-mode = <RPMH_REGULATOR_MODE_LPM>;
+			};
 		};
 
 		vreg_bob2: bob2 {
