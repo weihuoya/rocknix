@@ -134,7 +134,8 @@ jobs:
           cmake -S fex -B fex/build_ec -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
-            -DENABLE_LTO=False -DMINGW_TRIPLE=arm64ec-w64-mingw32 -DBUILD_TESTING=False
+            -DENABLE_LTO=False -DMINGW_TRIPLE=arm64ec-w64-mingw32 -DBUILD_TESTING=False \
+            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
           cmake --build fex/build_ec --target arm64ecfex -j $(nproc)
           cp fex/build_ec/Bin/libarm64ecfex.dll dist/usr/lib/wine/aarch64-windows/
 
