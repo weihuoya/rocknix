@@ -107,12 +107,14 @@ jobs:
           export PKG_CONFIG_SYSROOT_DIR=${SYSROOT}
           mkdir -p wine/build-arm64
           cd wine/build-arm64
+          echo 'int main(){return 0;}' > /tmp/conftest-smoke.c
+          aarch64-rocknix-linux-gnu-gcc -c /tmp/conftest-smoke.c -o /tmp/conftest-smoke.o && echo "cross gcc smoke test OK"
           ../configure --host=aarch64-rocknix-linux-gnu \
             --with-wine-tools=../build-tools \
             --with-mingw=clang \
             --enable-archs=arm64ec,aarch64,i386 \
             --disable-tests \
-            --prefix=/usr
+            --prefix=/usr || { tail -200 config.log; exit 1; }
           make -j$(nproc)
           make install DESTDIR=/work/rocknix/hangover/dist
           cd ../..
