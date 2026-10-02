@@ -86,6 +86,9 @@ jobs:
           SYSROOT=${TC}/aarch64-rocknix-linux-gnu/sysroot
           MINGW_WINE_DIR=/work/rocknix/toolchains/${MINGW_WINE}
           MINGW_FEX_DIR=/work/rocknix/toolchains/${MINGW_FEX}
+          export CCACHE_DIR=/work/rocknix/build.ROCKNIX-${DEVICE}.aarch64/.ccache
+          export HOME=/work/rocknix/.home
+          mkdir -p ${HOME}
 
           cd /work/rocknix
           git clone https://github.com/AndreRH/hangover.git
@@ -108,7 +111,7 @@ jobs:
           mkdir -p wine/build-arm64
           cd wine/build-arm64
           echo 'int main(){return 0;}' > /tmp/conftest-smoke.c
-          aarch64-rocknix-linux-gnu-gcc -c /tmp/conftest-smoke.c -o /tmp/conftest-smoke.o && echo "cross gcc smoke test OK"
+          aarch64-rocknix-linux-gnu-gcc -c /tmp/conftest-smoke.c -o /tmp/conftest-smoke.o || { echo "cross gcc smoke test FAILED"; exit 1; }
           ../configure --host=aarch64-rocknix-linux-gnu \
             --with-wine-tools=../build-tools \
             --with-mingw=clang \
