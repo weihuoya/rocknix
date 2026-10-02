@@ -95,7 +95,7 @@ jobs:
           git clone https://github.com/AndreRH/hangover.git
           cd hangover
           git checkout ${HANGOVER_SHA}
-          git submodule update --init --depth 1 || git submodule update --init
+          git submodule update --init --recursive --depth 1 || git submodule update --init --recursive
 
           # native x86_64 wine build tools
           export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:${PATH}
