@@ -23,6 +23,10 @@ jobs:
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
       HANGOVER_SHA: 56e385b7ff490edd281b288f420677093563560b
+      FEX_REPO: https://github.com/weihuoya/FEX.git
+      FEX_SHA: a60a5378662d54cae648146b86a4216f42e43558
+      BOX64_REPO: https://github.com/ptitSeb/box64.git
+      BOX64_SHA: f5ffcd0a048f3c3cf031a8f29690c59f83334686
       MINGW_WINE: llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64
       MINGW_WINE_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20260826/llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64.tar.xz
       MINGW_FEX: llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
@@ -95,7 +99,44 @@ jobs:
           git clone https://github.com/AndreRH/hangover.git
           cd hangover
           git checkout ${HANGOVER_SHA}
-          git submodule update --init --recursive --depth 1 || git submodule update --init --recursive
+          git submodule update --init --depth 1 wine || git submodule update --init wine
+
+          git clone ${FEX_REPO} fex
+          git -C fex checkout ${FEX_SHA}
+          git -C fex submodule update --init --recursive --depth 1 || git -C fex submodule update --init --recursive
+
+          git clone ${BOX64_REPO} box64
+          git -C box64 checkout ${BOX64_SHA}
+
+          mkdir -p dist/usr/lib/wine/aarch64-windows
+
+          # fex: libarm64ecfex.dll for x86_64 emulation
+          export PATH=${MINGW_FEX_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          cmake -S fex -B fex/build_ec -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
+            -DENABLE_LTO=False -DMINGW_TRIPLE=arm64ec-w64-mingw32 -DBUILD_TESTING=False \
+            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
+          cmake --build fex/build_ec --target arm64ecfex -j $(nproc)
+          cp fex/build_ec/Bin/libarm64ecfex.dll dist/usr/lib/wine/aarch64-windows/
+
+          # fex: libwow64fex.dll for i386 emulation (alternative to box64)
+          cmake -S fex -B fex/build_pe -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
+            -DENABLE_LTO=False -DMINGW_TRIPLE=aarch64-w64-mingw32 -DBUILD_TESTING=False \
+            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
+          cmake --build fex/build_pe --target wow64fex -j $(nproc)
+          cp fex/build_pe/Bin/libwow64fex.dll dist/usr/lib/wine/aarch64-windows/
+
+          # box64: wowbox64.dll for i386 emulation
+          export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          cmake -S box64 -B box64/build_pe -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=aarch64-rocknix-linux-gnu-gcc \
+            -DARM_DYNAREC=ON -DWOW64=ON
+          cmake --build box64/build_pe --target wowbox64 -j $(nproc)
+          cp box64/build_pe/wowbox64-prefix/src/wowbox64-build/wowbox64.dll dist/usr/lib/wine/aarch64-windows/
 
           # native x86_64 wine build tools
           export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:${PATH}
@@ -128,25 +169,6 @@ jobs:
           make -j$(nproc)
           make install DESTDIR=/work/rocknix/hangover/dist
           cd ../..
-
-          # fex: libarm64ecfex.dll for x86_64 emulation
-          export PATH=${MINGW_FEX_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          cmake -S fex -B fex/build_ec -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
-            -DENABLE_LTO=False -DMINGW_TRIPLE=arm64ec-w64-mingw32 -DBUILD_TESTING=False \
-            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
-          cmake --build fex/build_ec --target arm64ecfex -j $(nproc)
-          cp fex/build_ec/Bin/libarm64ecfex.dll dist/usr/lib/wine/aarch64-windows/
-
-          # box64: wowbox64.dll for i386 emulation
-          export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          cmake -S box64 -B box64/build_pe -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=aarch64-rocknix-linux-gnu-gcc \
-            -DARM_DYNAREC=ON -DWOW64=ON
-          cmake --build box64/build_pe --target wowbox64 -j $(nproc)
-          cp box64/build_pe/wowbox64-prefix/src/wowbox64-build/wowbox64.dll dist/usr/lib/wine/aarch64-windows/
 
           ls -la dist/usr/bin/ dist/usr/lib/wine/aarch64-windows/
           EOF
