@@ -1,0 +1,109 @@
+name: Build fex-emu for SM8550
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+jobs:
+  build-aarch64-fex-emu:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-fex-emu-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-fex-emu-
+      - name: Download toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"*
+      - name: Build fex-emu
+        run: |
+          ./scripts/get_env > .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build fex-emu:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-fex-emu)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+      - name: Package fex-emu
+        run: |
+          set -e
+          INSTALL_DIR="build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg"
+
+          FEX_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'fex-emu*' | head -n 1)
+          [ -n "$FEX_DIR" ] || { echo "ERROR: fex-emu not found"; exit 1; }
+          echo "fex-emu: ${FEX_DIR}"
+
+          echo "=== Creating package ==="
+          tar --zstd -cf fex-emu-aarch64-${{ env.DEVICE }}.tar.zst \
+            -C "${INSTALL_DIR}" "$(basename "$FEX_DIR")"
+          ls -la fex-emu-aarch64-${{ env.DEVICE }}.tar.zst
+          echo "Package created successfully"
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET="fex-emu-aarch64-${{ env.DEVICE }}.tar.zst"
+          gh release create "fex-aarch64-${{ env.DEVICE }}" \
+            --title "FEX-Emu for ${{ env.DEVICE }}" \
+            --notes "FEX-Emu (x86/x86-64 emulator) for ROCKNIX ${{ env.DEVICE }} aarch64. Built without FEXConfig (no qt6).\n\nExtract on device and use:\nexport PATH=\$(pwd)/fex-emu-<ver>/usr/bin:\$PATH" \
+            --prerelease || true
+          gh release upload "fex-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-fex-emu-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
