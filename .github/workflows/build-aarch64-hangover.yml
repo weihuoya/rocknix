@@ -106,6 +106,7 @@ jobs:
           cd ../..
 
           # aarch64 wine
+          export PKG_CONFIG=${TC}/bin/pkg-config
           export PKG_CONFIG_LIBDIR=${SYSROOT}/usr/lib/pkgconfig:${SYSROOT}/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=${SYSROOT}
           mkdir -p wine/build-arm64
