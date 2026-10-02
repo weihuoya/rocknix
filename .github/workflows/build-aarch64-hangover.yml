@@ -97,7 +97,7 @@ jobs:
           export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:${PATH}
           mkdir -p wine/build-tools
           cd wine/build-tools
-          ../configure --enable-win64
+          ../configure --enable-win64 --without-x --without-freetype
           make __tooldeps__ -j$(nproc)
           make -C nls -j$(nproc)
           cd ../..
