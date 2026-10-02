@@ -65,6 +65,7 @@ jobs:
             echo '  echo "=== Building dep $pkg ==="'
             echo '  ./scripts/build "$pkg":target'
             echo 'done'
+            echo './scripts/build freetype:host'
           } > build-deps.sh
           docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
             bash /work/rocknix/build-deps.sh
@@ -98,12 +99,17 @@ jobs:
 
           # native x86_64 wine build tools
           export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:${PATH}
+          export PKG_CONFIG=${TC}/bin/pkg-config
+          export PKG_CONFIG_LIBDIR=${TC}/lib/pkgconfig
+          export CFLAGS="-I${TC}/include"
+          export LDFLAGS="-L${TC}/lib -Wl,-rpath,${TC}/lib"
           mkdir -p wine/build-tools
           cd wine/build-tools
-          ../configure --enable-win64 --without-x --without-freetype
+          ../configure --enable-win64 --without-x
           make __tooldeps__ -j$(nproc)
           make -C nls -j$(nproc)
           cd ../..
+          unset CFLAGS LDFLAGS
 
           # aarch64 wine
           export PKG_CONFIG=${TC}/bin/pkg-config
