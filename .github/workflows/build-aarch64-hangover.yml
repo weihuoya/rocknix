@@ -23,6 +23,8 @@ jobs:
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
       HANGOVER_SHA: 56e385b7ff490edd281b288f420677093563560b
+      WINE_REPO: https://github.com/weihuoya/wine.git
+      WINE_SHA: a0f8294e8e58792a7d40bfab391b3532c4bf98f2
       FEX_REPO: https://github.com/weihuoya/FEX.git
       FEX_SHA: a60a5378662d54cae648146b86a4216f42e43558
       BOX64_REPO: https://github.com/ptitSeb/box64.git
@@ -99,7 +101,9 @@ jobs:
           git clone https://github.com/AndreRH/hangover.git
           cd hangover
           git checkout ${HANGOVER_SHA}
-          git submodule update --init --depth 1 wine || git submodule update --init wine
+
+          git clone ${WINE_REPO} wine
+          git -C wine checkout ${WINE_SHA}
 
           git clone ${FEX_REPO} fex
           git -C fex checkout ${FEX_SHA}
