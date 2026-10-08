@@ -1,0 +1,143 @@
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -192,6 +192,9 @@
+ struct fastrpc_buf {
+ 	struct fastrpc_user *fl;
+ 	struct dma_buf *dmabuf;
++	/* 包装用户态 dma-buf 时(flags=0 mmap 路径)使用 */
++	struct dma_buf_attachment *attach;
++	struct sg_table *sgt;
+ 	struct device *dev;
+ 	void *virt;
+ 	dma_addr_t dma_addr;
+@@ -422,6 +425,15 @@
+ 
+ static void fastrpc_buf_free(struct fastrpc_buf *buf)
+ {
++	if (buf->attach) {
++		/* 用户态 dma-buf 包装:detach/put 而非 dma_free_coherent */
++		dma_buf_unmap_attachment_unlocked(buf->attach, buf->sgt,
++						  DMA_BIDIRECTIONAL);
++		dma_buf_detach(buf->dmabuf, buf->attach);
++		dma_buf_put(buf->dmabuf);
++		kfree(buf);
++		return;
++	}
+ 	dma_free_coherent(buf->dev, buf->size, buf->virt,
+ 			  fastrpc_ipa_to_dma_addr(buf->fl->cctx, buf->dma_addr));
+ 	kfree(buf);
+@@ -1936,6 +1948,83 @@
+ 	return err;
+ }
+ 
++/*
++ * 把用户态已分配的 dma-buf(fd 传入)包装成 fastrpc_buf,用于
++ * flags=0 的 mmap 请求(下游 adsprpc 的常规路径,libcdsprpc 的
++ * apps_mem/rpcmem 依赖它):attach 进会话的 SMMU domain 取 iova,
++ * 后续 INIT_MMAP 把该地址告诉 DSP。
++ */
++static int fastrpc_buf_wrap_dmabuf(struct fastrpc_user *fl, struct device *dev,
++				   int fd, u64 size, struct fastrpc_buf **obuf)
++{
++	struct fastrpc_buf *buf;
++	struct scatterlist *sgl;
++	struct sg_table *sgt;
++	u64 total = 0;
++	int err, i;
++
++	buf = kzalloc_obj(*buf);
++	if (!buf)
++		return -ENOMEM;
++
++	INIT_LIST_HEAD(&buf->attachments);
++	INIT_LIST_HEAD(&buf->node);
++	mutex_init(&buf->lock);
++	buf->fl = fl;
++	buf->virt = NULL;
++	buf->dma_addr = 0;
++	buf->size = size;
++	buf->dev = dev;
++	buf->raddr = 0;
++	buf->attach = NULL;
++	buf->sgt = NULL;
++
++	buf->dmabuf = dma_buf_get(fd);
++	if (IS_ERR(buf->dmabuf)) {
++		err = PTR_ERR(buf->dmabuf);
++		goto err_free;
++	}
++
++	buf->attach = dma_buf_attach(buf->dmabuf, dev);
++	if (IS_ERR(buf->attach)) {
++		err = PTR_ERR(buf->attach);
++		goto err_put;
++	}
++
++	sgt = dma_buf_map_attachment_unlocked(buf->attach, DMA_BIDIRECTIONAL);
++	if (IS_ERR(sgt)) {
++		err = PTR_ERR(sgt);
++		goto err_detach;
++	}
++	buf->sgt = sgt;
++
++	for_each_sg(sgt->sgl, sgl, sgt->nents, i)
++		total += sg_dma_len(sgl);
++	if (size > total) {
++		dev_err(dev, "wrap dmabuf: size 0x%llx over mapping 0x%llx\n",
++			size, total);
++		err = -EINVAL;
++		goto err_unmap;
++	}
++
++	buf->dma_addr = fastrpc_compute_dma_addr(fl, sg_dma_address(sgt->sgl));
++
++	*obuf = buf;
++
++	return 0;
++
++err_unmap:
++	dma_buf_unmap_attachment_unlocked(buf->attach, sgt, DMA_BIDIRECTIONAL);
++err_detach:
++	dma_buf_detach(buf->dmabuf, buf->attach);
++err_put:
++	dma_buf_put(buf->dmabuf);
++err_free:
++	mutex_destroy(&buf->lock);
++	kfree(buf);
++	return err;
++}
++
+ static int fastrpc_req_mmap(struct fastrpc_user *fl, char __user *argp)
+ {
+ 	struct fastrpc_invoke_args args[3] = { [0 ... 2] = { 0 } };
+@@ -1958,14 +2047,24 @@
+ 	}
+ 
+ 	if (req.vaddrin) {
+-		dev_err(dev, "adding user allocated pages is not supported\n");
+-		return -EINVAL;
+-	}
+-
+-	if (req.flags == ADSP_MMAP_REMOTE_HEAP_ADDR)
++		/*
++		 * vaddrin 非空:用户态已分配缓冲(dma-buf,fd 传入)的映射
++		 * 请求——下游 adsprpc 支持,libcdsprpc 的 apps_mem/rpcmem
++		 * 依赖它;flags=0 为常规映射,ADD_PAGES(0x1000)为 DSP 侧
++		 * 按需补页(如模块头页),两者都包装后照常走 INIT_MMAP,
++		 * flags 原样透传给 DSP。
++		 */
++		if ((req.flags && req.flags != ADSP_MMAP_ADD_PAGES) ||
++		    req.fd < 0) {
++			dev_err(dev, "adding user allocated pages is not supported\n");
++			return -EINVAL;
++		}
++		err = fastrpc_buf_wrap_dmabuf(fl, dev, req.fd, req.size, &buf);
++	} else if (req.flags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
+ 		err = fastrpc_remote_heap_alloc(fl, dev, req.size, &buf);
+-	else
++	} else {
+ 		err = fastrpc_buf_alloc(fl, dev, req.size, &buf);
++	}
+ 
+ 	if (err) {
+ 		dev_err(dev, "failed to allocate buffer\n");

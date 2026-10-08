@@ -5,7 +5,9 @@
 
 /dts-v1/;
 
+#include <dt-bindings/input/gpio-keys.h>
 #include "qcs8550-ayn-common.dtsi"
+#include "qcs8550-sdhc2-downstream.dtsi"
 
 / {
 	model = "AYN Thor";
@@ -31,12 +33,16 @@
 	gpio-keys-lid {
 		compatible = "gpio-keys";
 
+		pinctrl-0 = <&hall_lid_n>;
+		pinctrl-names = "default";
+
 		hall-lid-sensor {
 			label = "Hall Lid Sensor";
 			gpios = <&tlmm 17 GPIO_ACTIVE_LOW>;
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
 			linux,can-disable;
+			wakeup-event-action = <EV_ACT_DEASSERTED>;
 			wakeup-source;
 		};
 	};
@@ -399,6 +405,7 @@
 		label = "bottom_touchscreen";
 
 		no-regmap-bulk-read;
+		edt,retain-power-in-suspend;
 	};
 };
 
@@ -448,6 +455,15 @@
 &tlmm {
 	key_ayn_n: key-ayn-n-state {
 		pins = "gpio41";
+		function = "gpio";
+		bias-pull-up;
+		output-disable;
+	};
+
+	/* Open-drain hall output: with no pull-up the released (lid open)
+	   level is undefined. */
+	hall_lid_n: hall-lid-n-state {
+		pins = "gpio17";
 		function = "gpio";
 		bias-pull-up;
 		output-disable;

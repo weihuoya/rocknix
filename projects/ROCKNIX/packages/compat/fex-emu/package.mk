@@ -2,11 +2,11 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="fex-emu"
-PKG_VERSION="e869aa644a16e4332cdc15c1ea0b4d13d482385d"
+PKG_VERSION="9fbdc00bd6401aff3b32d79e78ff98b8a13e4dcf"
 PKG_LICENSE="MIT"
 PKG_SITE="https://github.com/FEX-Emu/FEX"
 PKG_URL="https://github.com/FEX-Emu/FEX.git"
-PKG_DEPENDS_TARGET="toolchain llvm:host fex-emu:host squashfs-tools zlib squashfuse alsa-lib libxcb wayland libglvnd libdrm libX11 libXrandr xorgproto qt6"
+PKG_DEPENDS_TARGET="toolchain llvm:host fex-emu:host squashfs-tools zlib squashfuse alsa-lib libxcb wayland libglvnd libdrm libX11 libXrandr xorgproto"
 PKG_DEPENDS_HOST="toolchain:host llvm:host openssl:host"
 PKG_LONGDESC="FEX-Emu is a fast x86/x86-64 emulator for AArch64"
 PKG_TOOLCHAIN="manual"
@@ -108,11 +108,10 @@ make_target() {
     -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
     -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY
     -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
-    -DBUILD_FEXCONFIG=True
+    -DBUILD_FEXCONFIG=False
     "${FEX_CMAKE_OPTS[@]}"
     -DGENERATOR_EXE="${TOOLCHAIN}/usr/bin/thunkgen"
     -DCMAKE_INSTALL_LIBDIR=lib
-    -DQT_HOST_PATH="${TOOLCHAIN}/usr/local/qt6"
     -DTUNE_CPU="${TUNE_CPU}"
   )
   cmake "${tgt_opts[@]}"
