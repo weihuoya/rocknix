@@ -114,6 +114,7 @@ jobs:
             echo "Packaging: ${pkgdir}"
             cp -a "${pkgdir}/." "${STAGE}/"
           done
+          rm -f "${STAGE}/.rocknix-package"
 
           if [ ! -x "${STAGE}/usr/bin/less" ]; then
             echo "ERROR: less binary missing from package"
