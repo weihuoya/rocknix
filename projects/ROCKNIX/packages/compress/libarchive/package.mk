@@ -4,8 +4,13 @@
 . ${ROOT}/packages/compress/libarchive/package.mk
 
 PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET/-DBUILD_SHARED_LIBS=OFF/-DBUILD_SHARED_LIBS=ON}"
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET/-DENABLE_TAR=OFF/-DENABLE_TAR=ON}"
+PKG_CMAKE_OPTS_TARGET="${PKG_CMAKE_OPTS_TARGET/-DENABLE_TAR_SHARED=FALSE/-DENABLE_TAR_SHARED=TRUE}"
 
 makeinstall_target() {
+  mkdir -p ${INSTALL}/usr/bin
+    cp -rf bin/bsdtar ${INSTALL}/usr/bin
+
   mkdir -p ${INSTALL}/usr/lib
     cp -rf libarchive/libarchive.so* ${INSTALL}/usr/lib
 

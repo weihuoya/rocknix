@@ -2,8 +2,8 @@
 # Copyright (C) 2026 ROCKNIX (https://github.com/ROCKNIX)
 
 PKG_NAME="squashfs-tools"
-PKG_VERSION="4.7"
-PKG_SHA256="f1605ef720aa0b23939a49ef4491f6e734333ccc4bda4324d330da647e105328"
+PKG_VERSION="4.7.5"
+PKG_SHA256="547b7b7f4d2e44bf91b6fc554664850c69563701deab9fd9cd7e21f694c88ea6"
 PKG_LICENSE="GPL"
 PKG_SITE="https://github.com/plougher/squashfs-tools"
 PKG_URL="https://github.com/plougher/squashfs-tools/releases/download/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tar.gz"
@@ -16,7 +16,15 @@ PKG_TOOLCHAIN="manual"
 make_target() {
   make -C squashfs-tools clean
   make -C squashfs-tools \
-          unsquashfs
+          mksquashfs \
+          unsquashfs \
+          GZIP_SUPPORT=1 \
+          XZ_SUPPORT=0 \
+          LZO_SUPPORT=1 \
+          LZ4_SUPPORT=1 \
+          ZSTD_SUPPORT=1 \
+          XATTR_SUPPORT=0 \
+          XATTR_DEFAULT=0
 }
 
 make_host() {
@@ -38,6 +46,7 @@ makeinstall_host() {
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
+  cp ${PKG_BUILD}/squashfs-tools/mksquashfs ${INSTALL}/usr/bin/mksquashfs
   cp ${PKG_BUILD}/squashfs-tools/unsquashfs ${INSTALL}/usr/bin/unsquashfs
-  chmod 755 ${INSTALL}/usr/bin/unsquashfs
+  chmod 755 ${INSTALL}/usr/bin/mksquashfs ${INSTALL}/usr/bin/unsquashfs
 }

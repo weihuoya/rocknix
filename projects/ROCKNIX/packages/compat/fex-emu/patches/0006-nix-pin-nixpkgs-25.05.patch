@@ -1,0 +1,19 @@
+nix: pin nixpkgs to nixos-25.05 for guest thunk toolchains
+
+Unpinned <nixpkgs> (unstable) now ships clang 21 + gcc 16, and clang 21's
+__has_builtin(__builtin_nansf128) returns true on i686 while the builtin
+yields a 12-byte long double, breaking libstdc++'s numeric_limits<__float128>
+signaling_NaN() bit_cast when building the 32-bit guest thunk libs.
+
+Pin to the nixos-25.05 branch (clang 19 / gcc 14), the same toolchain
+generation that previously built FEX successfully.
+
+diff --git a/Data/nix/LibraryForwarding/shell.nix b/Data/nix/LibraryForwarding/shell.nix
+--- a/Data/nix/LibraryForwarding/shell.nix
++++ b/Data/nix/LibraryForwarding/shell.nix
+@@ -1,4 +1,4 @@
+-{ pkgs ? import <nixpkgs> { } }:
++{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/ac62194c3917d5f474c1a844b6fd6da2db95077d.tar.gz") { } }:
+ 
+ let
+   pkgsCross32 = pkgs.pkgsCross.gnu32;
