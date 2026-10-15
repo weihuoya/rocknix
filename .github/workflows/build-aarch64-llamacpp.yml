@@ -42,11 +42,12 @@ jobs:
           git -C llama.cpp rev-parse --short HEAD
 
       # 上游 #30423 已并入 master:GGML_HEXAGON_POWER_MODE(8 档 DCVS/HMX 电源档)开箱可用,
-      # 但默认档 burst 锁 MAX corner 且关 DCVS,SM8550 满载触发 PMIC 级整机复位。
-      # 本补丁只留 SM8550 特有改动:默认档与未知值回退钳到 high_power_saver(SVS+..NOM,生产档),
+      # 但上游默认档 burst 锁 MAX corner 且关 DCVS,SM8550 满载触发 PMIC 级整机复位;
+      # high_power_saver(SVS+..NOM)也在 6e66cb5 上被 reme 索引批次击穿过(2026-10-15)。
+      # 本补丁只留 SM8550 特有改动:默认档与未知值回退钳到 power_saver(SVS~SVS+,生产档),
       # low_balanced 及以上 v3 槽位全部钳到 high_power_saver 同值(任何 GGML_HEXAGON_POWER_MODE
-      # 取值都不会复位),另保留 DCVS_v2 实验槽位 dcvs2nomp/dcvs2turbo(仿 QNN 投票形态,
-      # 稳定性按构建逐一重测,9d7d504 上 dcvs2nomp 已被 reme 负载击穿过)。
+      # 取值都不会超过该区间),另保留 DCVS_v2 实验槽位 dcvs2nomp/dcvs2turbo(仿 QNN 投票形态,
+      # 稳定性按构建逐一重测,9d7d504 与 6e66cb5 上均被负载击穿过)。
       # 打不上必须 fail,不能放出未打补丁的构建。
       - name: Apply SM8550 power-mode patch
         run: |
@@ -60,7 +61,7 @@ jobs:
            static bool   opt_hostbuf = false;
            static bool   opt_dma64   = false;
           -static int    opt_power_mode = HTP_POWER_MODE_BURST; // DCVS/HMX power profile requested at session start
-          +static int    opt_power_mode = HTP_POWER_MODE_HIGH_POWER_SAVER; // SM8550: BURST 锁 MAX corner 会整机复位,默认钳到 high_power_saver
+          +static int    opt_power_mode = HTP_POWER_MODE_POWER_SAVER; // SM8550: BURST 锁 MAX、hps(SVS+..NOM) 均被实测击穿整机复位,默认钳到 power_saver
            
            static const std::pair<const char *, int> htp_power_mode_names[] = {
                { "low_power_saver",            HTP_POWER_MODE_LOW_POWER_SAVER },
@@ -71,7 +72,7 @@ jobs:
           -    { "default",                    HTP_POWER_MODE_BURST }, // flip this to change the default mode
           +    { "dcvs2nomp",                  HTP_POWER_MODE_DCVS2_NOMP },
           +    { "dcvs2turbo",                 HTP_POWER_MODE_DCVS2_TURBO },
-          +    { "default",                    HTP_POWER_MODE_HIGH_POWER_SAVER }, // flip this to change the default mode
+          +    { "default",                    HTP_POWER_MODE_POWER_SAVER }, // flip this to change the default mode
            };
            
            static int htp_power_mode_from_str(const char * s) {
@@ -80,7 +81,7 @@ jobs:
                    int m = htp_power_mode_from_str(str_power_mode);
                    if (m < 0) {
           -            GGML_LOG_WARN("ggml-hex: unknown GGML_HEXAGON_POWER_MODE '%s', falling back to 'burst'\n", str_power_mode);
-          +            GGML_LOG_WARN("ggml-hex: unknown GGML_HEXAGON_POWER_MODE '%s', falling back to 'high_power_saver'\n", str_power_mode);
+          +            GGML_LOG_WARN("ggml-hex: unknown GGML_HEXAGON_POWER_MODE '%s', falling back to 'power_saver'\n", str_power_mode);
                    } else {
                        opt_power_mode = m;
                    }
@@ -160,8 +161,8 @@ jobs:
                if (power_mode >= HTP_POWER_MODE_COUNT) {
           -        FARF(ERROR, "invalid power-mode %u, falling back to burst", (unsigned) power_mode);
           -        power_mode = HTP_POWER_MODE_BURST;
-          +        FARF(ERROR, "invalid power-mode %u, falling back to high_power_saver", (unsigned) power_mode);
-          +        power_mode = HTP_POWER_MODE_HIGH_POWER_SAVER;
+          +        FARF(ERROR, "invalid power-mode %u, falling back to power_saver", (unsigned) power_mode);
+          +        power_mode = HTP_POWER_MODE_POWER_SAVER;
                }
           -    const struct htp_power_profile * pwr = &htp_power_profiles[power_mode];
           +    const boolean use_dcvs_v2 = (power_mode >= HTP_POWER_MODE_DCVS2_BASE);
