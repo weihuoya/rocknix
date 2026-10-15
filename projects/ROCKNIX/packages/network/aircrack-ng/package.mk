@@ -11,5 +11,8 @@ PKG_DEPENDS_TARGET="toolchain openssl libnl libpcap sqlite pcre2 zlib"
 PKG_LONGDESC="Complete suite of tools to assess WiFi network security."
 PKG_TOOLCHAIN="autotools"
 
+# aircrack-ng's pcap detection hardcodes host paths (/usr/include), which the
+# cross toolchain rejects; point it at the sysroot instead.
 PKG_CONFIGURE_OPTS_TARGET="--with-experimental \
+                           --with-libpcap-include=${SYSROOT_PREFIX}/usr/include \
                            ETHTOOL=/usr/sbin/ethtool"
