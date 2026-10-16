@@ -32,4 +32,4 @@ export PAHOLE_VERSION=124
 
 # Run the actual kernel build as the non-root docker user.
 su -s /bin/bash docker -c \
-  'cd /work/rocknix && set -a && . ./.env && set +a && unset DEVICE_ROOT && export PATH=/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin && export PAHOLE_VERSION=124 && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build linux'
+  'cd /work/rocknix && set -a && . ./.env && set +a && unset DEVICE_ROOT && export PATH=/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin && export PAHOLE_VERSION=124 && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build linux && PROJECT=ROCKNIX DEVICE=SM8550 ARCH=aarch64 ./scripts/build kernel-firmware'

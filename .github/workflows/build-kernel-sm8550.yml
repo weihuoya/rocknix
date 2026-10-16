@@ -152,6 +152,16 @@ jobs:
             fi
           fi
 
+          # Firmware (kernel-firmware package, includes rtw89 via SM8550 kernel-firmware.dat)
+          KF_INSTALL=$(find "${BUILD_DIR}/install_pkg" -maxdepth 1 -type d -name 'kernel-firmware-*' | head -1)
+          FW_BASE="${KF_INSTALL}/usr/lib/kernel-overlays/base/lib/firmware"
+          if [ ! -d "${FW_BASE}" ]; then
+            echo "ERROR: kernel-firmware install dir not found under ${BUILD_DIR}/install_pkg"
+            find "${BUILD_DIR}/install_pkg" -maxdepth 1 -type d -name 'kernel-firmware*' || true
+            exit 1
+          fi
+          tar --zstd -cf kernel-artifacts/firmware.tar.zst -C "${FW_BASE}" .
+
           ls -la kernel-artifacts/
 
       - name: Package kernel artifacts
