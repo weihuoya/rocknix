@@ -1,0 +1,108 @@
+name: Build strace and gdb for SM8550
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+jobs:
+  build-aarch64-strace-gdb:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-strace-gdb-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-strace-gdb-
+      - name: Download toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"*
+      - name: Build strace and gdb
+        run: |
+          ./scripts/get_env > .env
+          set -e
+          {
+            echo 'set -e'
+            echo 'for pkg in strace gdb; do'
+            echo '  echo "=== Building $pkg ==="'
+            echo '  ./scripts/build "$pkg":target'
+            echo 'done'
+          } > build-strace-gdb.sh
+          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash /work/rocknix/build-strace-gdb.sh
+          rm -f build-strace-gdb.sh
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-strace-gdb)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+      - name: Package strace and gdb
+        run: |
+          set -e
+          INSTALL_DIR="build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg"
+
+          STRACE_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'strace*' | head -n 1)
+          GDB_DIR=$(find "${INSTALL_DIR}" -maxdepth 1 -type d -name 'gdb*' | head -n 1)
+          [ -n "$STRACE_DIR" ] || { echo "ERROR: strace not found"; exit 1; }
+          [ -n "$GDB_DIR" ] || { echo "ERROR: gdb not found"; exit 1; }
+          echo "strace: ${STRACE_DIR}"
+          echo "gdb: ${GDB_DIR}"
+
+          echo "=== Creating package ==="
+          tar --zstd -cf strace-gdb-aarch64-${{ env.DEVICE }}.tar.zst \
+            -C "${INSTALL_DIR}" "$(basename "$STRACE_DIR")" "$(basename "$GDB_DIR")"
+          ls -la strace-gdb-aarch64-${{ env.DEVICE }}.tar.zst
+          echo "Package created successfully"
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET="strace-gdb-aarch64-${{ env.DEVICE }}.tar.zst"
+          gh release create "strace-gdb-aarch64-${{ env.DEVICE }}" \
+            --title "strace and gdb for ${{ env.DEVICE }}" \
+            --notes "strace and gdb for ROCKNIX ${{ env.DEVICE }} aarch64." \
+            --prerelease || true
+          gh release upload "strace-gdb-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-strace-gdb-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi

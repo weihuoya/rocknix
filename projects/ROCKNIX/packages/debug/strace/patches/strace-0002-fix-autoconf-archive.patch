@@ -1,0 +1,25 @@
+From ba71a5f3778df1bb19ba593f6a5550c01f5349ad Mon Sep 17 00:00:00 2001
+From: MilhouseVH <milhouseVH.github@nmacleod.com>
+Date: Tue, 28 Jan 2020 03:17:14 +0000
+Subject: [PATCH] fix API change since autoconf-archive-2019.01.06
+
+---
+ Makefile.am | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index c8d86f02a..0ac64b00f 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -21,7 +21,7 @@ man_MANS = doc/strace.1 doc/strace-log-merge.1
+ 
+ ACLOCAL_AMFLAGS = -I m4 -I src/xlat
+ 
+-@CODE_COVERAGE_RULES@
++include $(top_srcdir)/aminclude_static.am
+ CODE_COVERAGE_BRANCH_COVERAGE = 1
+ CODE_COVERAGE_GENHTML_OPTIONS = $(CODE_COVERAGE_GENHTML_OPTIONS_DEFAULT) \
+ 	--title "$(PACKAGE_NAME)-$(PACKAGE_VERSION)" \
+-- 
+2.7.4
+
