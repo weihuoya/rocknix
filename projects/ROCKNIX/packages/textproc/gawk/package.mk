@@ -11,10 +11,12 @@ PKG_DEPENDS_TARGET="toolchain"
 PKG_LONGDESC="GNU awk, a full AWK implementation (gensub/match() array/switch/asort/regex RS), replacing the BusyBox awk applet."
 PKG_TOOLCHAIN="configure"
 
-# 动态扩展(inplace/fork/time 等 .so)设备上用不到,关掉省约 0.9MB
+# 开动态扩展只为 inplace(awk -i inplace 就地改文件),其余 12 个 .so 在
+# post_makeinstall_target 里裁掉。--disable-extensions 不是"少编一个 .so":
+# configure 会跳过 dlfcn.h 检测、不定义 DYNAMIC,主程序从此完全没有加载扩展的
+# 能力(@load 报 "dynamic loading of libraries is not supported"),必须开这个开关。
 PKG_CONFIGURE_OPTS_TARGET="--disable-nls \
-                           --disable-mpfr \
-                           --disable-extensions"
+                           --disable-mpfr"
 
 # configure 用 AC_RUN_IFELSE 探测 printf 的 %F / %a,交叉编译时一律判为不支持,
 # 导致 %F 被降级成 %f(inf/nan 大小写丢失)、%a 直接失效。目标 glibc 两者都支持,
@@ -34,6 +36,9 @@ post_makeinstall_target() {
   rm -rf ${INSTALL}/usr/lib/awk
   rm -rf ${INSTALL}/etc/profile.d
   rm -f ${INSTALL}/usr/bin/gawkbug
+
+  # 只留 inplace,其余扩展(约 806KB)设备上用不到
+  find ${INSTALL}/usr/lib/gawk -type f ! -name 'inplace.so' -delete
 
   debug_strip ${INSTALL}/usr
 }

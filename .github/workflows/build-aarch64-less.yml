@@ -145,6 +145,17 @@ jobs:
             fi
           done
 
+          # gawk 只保留 inplace 扩展;缺了它 awk -i inplace 不可用,多出来的是没裁干净
+          if [ ! -f "${STAGE}/usr/lib/gawk/inplace.so" ]; then
+            echo "ERROR: usr/lib/gawk/inplace.so missing from package"
+            exit 1
+          fi
+          if [ -n "$(find "${STAGE}/usr/lib/gawk" -type f ! -name 'inplace.so' -print -quit)" ]; then
+            echo "ERROR: unexpected extra gawk extension in package"
+            find "${STAGE}/usr/lib/gawk" -type f ! -name 'inplace.so'
+            exit 1
+          fi
+
           for bad in etc/ld.so.cache usr/bin/systemctl usr/sbin/init usr/lib/ld-linux-aarch64.so.1; do
             if [ -e "${STAGE}/${bad}" ]; then
               echo "ERROR: base-system file leaked into package: ${bad}"
