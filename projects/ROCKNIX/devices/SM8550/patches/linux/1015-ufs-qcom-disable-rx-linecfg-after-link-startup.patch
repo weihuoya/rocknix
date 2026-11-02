@@ -131,10 +131,9 @@ Signed-off-by: jaewun <jaewun@users.noreply.github.com>
  #include <linux/platform_device.h>
  #include <linux/pm_domain.h>
  #include <linux/reset-controller.h>
-@@ -715,9 +716,16 @@ static int ufs_qcom_link_startup_notify(struct ufs_hba *hba,
+@@ -755,9 +756,15 @@ static int ufs_qcom_link_startup_notify(struct ufs_hba *hba,
  					enum ufs_notify_change_status status)
  {
-+	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
  	int err = 0;
 +	int linecfg_err;
  

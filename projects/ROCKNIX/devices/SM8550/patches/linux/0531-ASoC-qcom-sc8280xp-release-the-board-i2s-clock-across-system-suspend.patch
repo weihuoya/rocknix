@@ -17,11 +17,12 @@ or closed between the two only updates the count.
 ---
 --- a/sound/soc/qcom/sc8280xp.c
 +++ b/sound/soc/qcom/sc8280xp.c
-@@ -23,5 +23,6 @@
+@@ -23,6 +23,7 @@
  	struct snd_soc_jack dp_jack[8];
  	struct clk *i2s_clk;
  	int mi2s_clk_count;
 +	bool mi2s_clk_suspended;
+ 	const struct qcom_snd_soc_common *priv;
  	bool jack_setup;
  };
 @@ -91,7 +92,7 @@

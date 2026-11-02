@@ -35,11 +35,12 @@ diff --git a/drivers/gpu/drm/panel/Makefile b/drivers/gpu/drm/panel/Makefile
 index e2e83723083e..630f5f22e40f 100644
 --- a/drivers/gpu/drm/panel/Makefile
 +++ b/drivers/gpu/drm/panel/Makefile
-@@ -1,6 +1,7 @@
+@@ -1,7 +1,8 @@
  # SPDX-License-Identifier: GPL-2.0
  obj-$(CONFIG_DRM_PANEL_ABT_Y030XX067A) += panel-abt-y030xx067a.o
  obj-$(CONFIG_DRM_PANEL_AR06_4INCH) += panel-ar06-4inch.o
 +obj-$(CONFIG_DRM_PANEL_AR02_3INCH) += panel-ar02-3inch.o
+ obj-$(CONFIG_DRM_PANEL_ANBERNIC_TD4310) += panel-anbernic-td4310.o
  obj-$(CONFIG_DRM_PANEL_ARM_VERSATILE) += panel-arm-versatile.o
  obj-$(CONFIG_DRM_PANEL_ASUS_Z00T_TM5P5_NT35596) += panel-asus-z00t-tm5p5-n35596.o
  obj-$(CONFIG_DRM_PANEL_AUO_A030JTN01) += panel-auo-a030jtn01.o
@@ -48,7 +49,7 @@ new file mode 100644
 index 000000000000..67151480f1aa
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/panel-ar02-3inch.c
-@@ -0,0 +1,648 @@
+@@ -0,0 +1,649 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// Copyright (c) 2025 FIXME
 +// Generated with linux-mdss-dsi-panel-driver-generator from vendor device tree:
@@ -61,6 +62,7 @@ index 000000000000..67151480f1aa
 +#include <linux/module.h>
 +#include <linux/regulator/consumer.h>
 +
++#include <drm/drm_of.h>
 +#include <drm/drm_mipi_dsi.h>
 +#include <drm/drm_modes.h>
 +#include <drm/drm_panel.h>
@@ -642,7 +644,7 @@ index 000000000000..67151480f1aa
 +			  MIPI_DSI_CLOCK_NON_CONTINUOUS;
 +
 +	/* Orientation */
-+	ret = of_drm_get_panel_orientation(dev->of_node, &ctx->orientation);
++	ret = drm_of_get_panel_orientation(dev->of_node, &ctx->orientation);
 +	if (ret < 0) {
 +		dev_err(dev, "failed to get orientation %d\n", ret);
 +		return ret;

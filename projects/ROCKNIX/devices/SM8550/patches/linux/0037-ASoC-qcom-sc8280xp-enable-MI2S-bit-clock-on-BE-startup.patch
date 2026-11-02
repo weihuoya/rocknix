@@ -7,11 +7,12 @@ adding the ROCKNIX refcount and coverage for every MI2S backend.
 
 --- a/sound/soc/qcom/sc8280xp.c
 +++ b/sound/soc/qcom/sc8280xp.c
-@@ -22,6 +22,7 @@
+@@ -22,7 +22,8 @@
  	struct snd_soc_jack jack;
  	struct snd_soc_jack dp_jack[8];
  	struct clk *i2s_clk;
 +	int mi2s_clk_count;
+ 	const struct qcom_snd_soc_common *priv;
  	bool jack_setup;
  };
  

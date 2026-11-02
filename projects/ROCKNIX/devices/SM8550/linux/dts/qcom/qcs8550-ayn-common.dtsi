@@ -25,6 +25,7 @@
 /delete-node/ &cdsp_mem;
 /delete-node/ &q6_cdsp_dtb_mem;
 
+/delete-node/ &ipa;
 /delete-node/ &remoteproc_mpss;
 /delete-node/ &remoteproc_cdsp;
 
@@ -1111,7 +1112,7 @@
 	status = "okay";
 };
 
-&pcieport0 {
+&pcie0_port0 {
 	wake-gpios = <&tlmm 96 GPIO_ACTIVE_LOW>;
 	reset-gpios = <&tlmm 94 GPIO_ACTIVE_LOW>;
 

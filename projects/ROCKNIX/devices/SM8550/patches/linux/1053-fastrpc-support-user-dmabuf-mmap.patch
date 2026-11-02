@@ -10,10 +10,10 @@
  	struct device *dev;
  	void *virt;
  	dma_addr_t dma_addr;
-@@ -422,6 +425,15 @@
+@@ -468,4 +471,13 @@
+ 	if (!buf)
+ 		return;
  
- static void fastrpc_buf_free(struct fastrpc_buf *buf)
- {
 +	if (buf->attach) {
 +		/* 用户态 dma-buf 包装:detach/put 而非 dma_free_coherent */
 +		dma_buf_unmap_attachment_unlocked(buf->attach, buf->sgt,
@@ -24,8 +24,6 @@
 +		return;
 +	}
  	dma_free_coherent(buf->dev, buf->size, buf->virt,
- 			  fastrpc_ipa_to_dma_addr(buf->fl->cctx, buf->dma_addr));
- 	kfree(buf);
 @@ -1936,6 +1948,83 @@
  	return err;
  }
