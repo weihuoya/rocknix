@@ -1,0 +1,226 @@
+name: Build hangover for SM8550
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+jobs:
+  build-aarch64-hangover:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+      HANGOVER_SHA: 56e385b7ff490edd281b288f420677093563560b
+      WINE_REPO: https://github.com/weihuoya/wine.git
+      WINE_SHA: a0f8294e8e58792a7d40bfab391b3532c4bf98f2
+      FEX_REPO: https://github.com/weihuoya/FEX.git
+      FEX_SHA: 06d8505986cca8fd4890b23ecd80b03043fe7f7b
+      BOX64_REPO: https://github.com/ptitSeb/box64.git
+      BOX64_SHA: a43469d7a5b79b96654f4d6cf37406ad7ea69aba
+      MINGW_WINE: llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64
+      MINGW_WINE_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20260826/llvm-mingw-20260826-ucrt-ubuntu-22.04-x86_64.tar.xz
+      MINGW_FEX: llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
+      MINGW_FEX_URL: https://github.com/bylaws/llvm-mingw/releases/download/20250920/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64.tar.xz
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Restore ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-hangover-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-hangover-
+      - name: Download toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"*
+      - name: Download llvm-mingw
+        run: |
+          mkdir -p toolchains
+          curl -L --fail "${MINGW_WINE_URL}" -o mingw-wine.tar.xz
+          curl -L --fail "${MINGW_FEX_URL}" -o mingw-fex.tar.xz
+          tar -xf mingw-wine.tar.xz -C toolchains
+          tar -xf mingw-fex.tar.xz -C toolchains
+          rm -f mingw-wine.tar.xz mingw-fex.tar.xz
+      - name: Build wine dependencies into sysroot
+        run: |
+          ./scripts/get_env > .env
+          set -e
+          {
+            echo 'set -e'
+            echo 'for pkg in freetype fontconfig gnutls wayland wayland-protocols libxkbcommon vulkan-headers vulkan-loader libX11 libXext libXi libXrandr libXcursor libXinerama libXxf86vm libXrender libXcomposite alsa-lib pulseaudio; do'
+            echo '  echo "=== Building dep $pkg ==="'
+            echo '  ./scripts/build "$pkg":target'
+            echo 'done'
+            echo './scripts/build freetype:host'
+          } > build-deps.sh
+          docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash /work/rocknix/build-deps.sh
+          rm -f build-deps.sh
+      - name: Build hangover
+        run: |
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          cat > build-hangover.sh <<'EOF'
+          set -e
+          TC=/work/rocknix/build.ROCKNIX-${DEVICE}.aarch64/toolchain
+          SYSROOT=${TC}/aarch64-rocknix-linux-gnu/sysroot
+          MINGW_WINE_DIR=/work/rocknix/toolchains/${MINGW_WINE}
+          MINGW_FEX_DIR=/work/rocknix/toolchains/${MINGW_FEX}
+          export CCACHE_DIR=/work/rocknix/build.ROCKNIX-${DEVICE}.aarch64/.ccache
+          export HOME=/work/rocknix/.home
+          mkdir -p ${HOME}
+
+          cd /work/rocknix
+          git clone https://github.com/AndreRH/hangover.git
+          cd hangover
+          git checkout ${HANGOVER_SHA}
+
+          git clone ${WINE_REPO} wine
+          git -C wine checkout ${WINE_SHA}
+
+          git clone ${FEX_REPO} fex
+          git -C fex checkout ${FEX_SHA}
+          git -C fex submodule update --init --recursive --depth 1 || git -C fex submodule update --init --recursive
+
+          git clone ${BOX64_REPO} box64
+          git -C box64 checkout ${BOX64_SHA}
+
+          mkdir -p dist/usr/lib/wine/aarch64-windows
+
+          # fex: libarm64ecfex.dll for x86_64 emulation
+          export PATH=${MINGW_FEX_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          cmake -S fex -B fex/build_ec -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
+            -DENABLE_LTO=False -DMINGW_TRIPLE=arm64ec-w64-mingw32 -DBUILD_TESTING=False \
+            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
+          cmake --build fex/build_ec --target arm64ecfex -j $(nproc)
+          cp fex/build_ec/Bin/libarm64ecfex.dll dist/usr/lib/wine/aarch64-windows/
+
+          # fex: libwow64fex.dll for i386 emulation (alternative to box64)
+          cmake -S fex -B fex/build_pe -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE=/work/rocknix/hangover/fex/Data/CMake/toolchain_mingw.cmake \
+            -DENABLE_LTO=False -DMINGW_TRIPLE=aarch64-w64-mingw32 -DBUILD_TESTING=False \
+            -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON
+          cmake --build fex/build_pe --target wow64fex -j $(nproc)
+          cp fex/build_pe/Bin/libwow64fex.dll dist/usr/lib/wine/aarch64-windows/
+
+          # box64: wowbox64.dll for i386 emulation
+          export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          cmake -S box64 -B box64/build_pe -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=aarch64-rocknix-linux-gnu-gcc \
+            -DARM_DYNAREC=ON -DWOW64=ON
+          cmake --build box64/build_pe --target wowbox64 -j $(nproc)
+          cp box64/build_pe/wowbox64-prefix/src/wowbox64-build/wowbox64.dll dist/usr/lib/wine/aarch64-windows/
+
+          # native x86_64 wine build tools
+          export PATH=${MINGW_WINE_DIR}/bin:${TC}/bin:${PATH}
+          export PKG_CONFIG=${TC}/bin/pkg-config
+          export PKG_CONFIG_LIBDIR=${TC}/lib/pkgconfig
+          export CFLAGS="-I${TC}/include"
+          export LDFLAGS="-L${TC}/lib -Wl,-rpath,${TC}/lib"
+          mkdir -p wine/build-tools
+          cd wine/build-tools
+          ../configure --enable-win64 --without-x
+          make __tooldeps__ -j$(nproc)
+          make -C nls -j$(nproc)
+          cd ../..
+          unset CFLAGS LDFLAGS
+
+          # aarch64 wine
+          export PKG_CONFIG=${TC}/bin/pkg-config
+          export PKG_CONFIG_LIBDIR=${SYSROOT}/usr/lib/pkgconfig:${SYSROOT}/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=${SYSROOT}
+          mkdir -p wine/build-arm64
+          cd wine/build-arm64
+          echo 'int main(){return 0;}' > /tmp/conftest-smoke.c
+          aarch64-rocknix-linux-gnu-gcc -c /tmp/conftest-smoke.c -o /tmp/conftest-smoke.o || { echo "cross gcc smoke test FAILED"; exit 1; }
+          ../configure --host=aarch64-rocknix-linux-gnu \
+            --with-wine-tools=../build-tools \
+            --with-mingw=clang \
+            --enable-archs=arm64ec,aarch64,i386 \
+            --disable-tests \
+            --prefix=/usr || { tail -200 config.log; exit 1; }
+          make -j$(nproc)
+          make install DESTDIR=/work/rocknix/hangover/dist
+          cd ../..
+
+          ls -la dist/usr/bin/ dist/usr/lib/wine/aarch64-windows/
+          EOF
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix \
+            -e HANGOVER_SHA -e MINGW_WINE -e MINGW_FEX "ghcr.io/rocknix/rocknix-build:latest" \
+            bash /work/rocknix/build-hangover.sh; echo $? > docker_exit_code; } | tee output.log || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          rm -f build-hangover.sh
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-hangover)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+      - name: Package hangover
+        run: |
+          set -e
+          [ -f hangover/dist/usr/bin/wine ] || { echo "ERROR: wine binary not found"; exit 1; }
+          mv hangover/dist hangover-${{ env.DEVICE }}
+          tar --zstd -cf hangover-aarch64-${{ env.DEVICE }}.tar.zst -C hangover-${{ env.DEVICE }} .
+          ls -la hangover-aarch64-${{ env.DEVICE }}.tar.zst
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET="hangover-aarch64-${{ env.DEVICE }}.tar.zst"
+          gh release create "hangover-aarch64-${{ env.DEVICE }}" \
+            --title "Hangover for ${{ env.DEVICE }}" \
+            --notes "Hangover (Wine with FEX/Box64 emulation for x86/x86_64 Windows apps) for ROCKNIX ${{ env.DEVICE }} aarch64." \
+            --prerelease || true
+          gh release upload "hangover-aarch64-${{ env.DEVICE }}" "${ASSET}" --clobber || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-hangover-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload new sources to mirror
+        if: always()
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f sources/.upload_sources ]; then
+            ./scripts/upload_sources
+          fi
