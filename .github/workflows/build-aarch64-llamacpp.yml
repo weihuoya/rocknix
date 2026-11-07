@@ -53,19 +53,19 @@ jobs:
         run: |
           cat > /tmp/llama-hexagon-power-mode.patch <<'EOF'
           diff --git a/ggml/src/ggml-hexagon/ggml-hexagon.cpp b/ggml/src/ggml-hexagon/ggml-hexagon.cpp
-          index 08c15ff..1d2b114 100644
+          index 9b2600c..bea6e06 100644
           --- a/ggml/src/ggml-hexagon/ggml-hexagon.cpp
           +++ b/ggml/src/ggml-hexagon/ggml-hexagon.cpp
-          @@ -91,7 +91,7 @@ int    opt_verbose    = 0;
+          @@ -92,7 +92,7 @@ int    opt_verbose    = 0;
            int    opt_profile    = 0; // profiling mode (0-disabled, 1-basic, 2-pmu)
-           bool   opt_hostbuf    = false;
+           bool   opt_hostbuf    = true;
            bool   opt_dma64      = false;
           -int    opt_power_mode = HTP_POWER_MODE_BURST; // DCVS/HMX power profile requested at session start
           +int    opt_power_mode = HTP_POWER_MODE_POWER_SAVER; // SM8550: BURST 锁 MAX、hps(SVS+..NOM) 均被实测击穿整机复位,默认钳到 power_saver
            
            static const std::pair<const char *, int> htp_power_mode_names[] = {
                { "low_power_saver",            HTP_POWER_MODE_LOW_POWER_SAVER },
-          @@ -102,7 +102,9 @@ static const std::pair<const char *, int> htp_power_mode_names[] = {
+          @@ -103,7 +103,9 @@ static const std::pair<const char *, int> htp_power_mode_names[] = {
                { "high_performance",           HTP_POWER_MODE_HIGH_PERFORMANCE },
                { "sustained_high_performance", HTP_POWER_MODE_SUSTAINED_HIGH_PERFORMANCE },
                { "burst",                      HTP_POWER_MODE_BURST },
@@ -76,7 +76,7 @@ jobs:
            };
            
            static int htp_power_mode_from_str(const char * s) {
-          @@ -10039,7 +10041,7 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
+          @@ -3480,7 +3482,7 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
                if (str_power_mode) {
                    int m = htp_power_mode_from_str(str_power_mode);
                    if (m < 0) {
@@ -86,10 +86,10 @@ jobs:
                        opt_power_mode = m;
                    }
           diff --git a/ggml/src/ggml-hexagon/htp/htp-ops.h b/ggml/src/ggml-hexagon/htp/htp-ops.h
-          index 70d56e1..e763fb8 100644
+          index a3ff51e..1b66f65 100644
           --- a/ggml/src/ggml-hexagon/htp/htp-ops.h
           +++ b/ggml/src/ggml-hexagon/htp/htp-ops.h
-          @@ -208,7 +208,13 @@ enum htp_power_mode {
+          @@ -215,7 +215,13 @@ enum htp_power_mode {
                HTP_POWER_MODE_SUSTAINED_HIGH_PERFORMANCE = 6,
                HTP_POWER_MODE_BURST                      = 7,
            
@@ -105,10 +105,10 @@ jobs:
            
            enum htp_trace_event_id {
           diff --git a/ggml/src/ggml-hexagon/htp/main.c b/ggml/src/ggml-hexagon/htp/main.c
-          index df7c4a5..7f675d9 100644
+          index 1424f12..23c4180 100644
           --- a/ggml/src/ggml-hexagon/htp/main.c
           +++ b/ggml/src/ggml-hexagon/htp/main.c
-          @@ -404,28 +404,24 @@ static const struct htp_power_profile htp_power_profiles[HTP_POWER_MODE_COUNT] =
+          @@ -416,28 +416,24 @@ static const struct htp_power_profile htp_power_profiles[HTP_POWER_MODE_COUNT] =
                    HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS, HAP_DCVS_VCORNER_SVS_PLUS, HAP_DCVS_EXP_VCORNER_SVS),
                [HTP_POWER_MODE_HIGH_POWER_SAVER] =
                    HTP_POWER_PROFILE_ENTRY(HAP_DCVS_VCORNER_SVS_PLUS, HAP_DCVS_VCORNER_NOM, HAP_DCVS_EXP_VCORNER_SVS_L2),
@@ -155,7 +155,7 @@ jobs:
            };
            
            #undef HTP_POWER_PROFILE_ENTRY
-          @@ -437,10 +433,13 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
+          @@ -449,10 +445,13 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
                }
            
                if (power_mode >= HTP_POWER_MODE_COUNT) {
@@ -172,7 +172,7 @@ jobs:
                FARF(ALWAYS, "power-mode %u : dcvs-enable %d bus[%u,%u,%u] core[%u,%u,%u] sleep-disable %d hmx[%u,%u,%u]",
                     (unsigned) power_mode, (int) pwr->dcvs_enable,
                     (unsigned) pwr->bus_min_corner, (unsigned) pwr->bus_max_corner, (unsigned) pwr->bus_target_corner,
-          @@ -576,23 +575,36 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
+          @@ -588,23 +587,36 @@ AEEResult htp_iface_start(remote_handle64 handle, uint32_t sess_id, uint64_t dsp
                    HAP_power_request_t request;
                    memset(&request, 0, sizeof(request));
            
