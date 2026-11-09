@@ -6,3 +6,6 @@ qca/hmtnv20.*
 qcom/sm8550/a740_zap.mbn
 qcom/a740_sqe.fw
 qcom/gmu_gen70200.bin
+
+# USB WiFi adapter RTL8852CU (monitor mode / packet injection)
+rtw89/*

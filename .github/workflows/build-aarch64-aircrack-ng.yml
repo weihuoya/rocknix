@@ -1,0 +1,165 @@
+name: Build aircrack-ng for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: 'ROCKNIX device to build for'
+        required: false
+        type: string
+        default: 'SM8550'
+  workflow_call:
+    inputs:
+      DEVICE:
+        required: false
+        type: string
+        default: 'SM8550'
+
+jobs:
+  build-aarch64-aircrack-ng:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: ${{ inputs.DEVICE || 'SM8550' }}
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Restore ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-aircrack-ng-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-aarch64-${{ env.DEVICE }}-aircrack-ng-
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Pin aircrack-ng master commit
+        run: |
+          COMMIT=$(git ls-remote https://github.com/aircrack-ng/aircrack-ng.git refs/heads/master | cut -f1)
+          [ -n "${COMMIT}" ] || { echo "ERROR: failed to resolve aircrack-ng master HEAD"; exit 1; }
+          sed -i "s/^PKG_VERSION=.*/PKG_VERSION=\"${COMMIT}\"/" projects/ROCKNIX/packages/network/aircrack-ng/package.mk
+          echo "AIRCRACK_NG_COMMIT=${COMMIT}" >> "$GITHUB_ENV"
+
+      - name: Build aircrack-ng
+        run: |
+          ./scripts/get_env > .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build aircrack-ng:target && ./scripts/build pciutils:target"; echo $? > docker_exit_code; } 2>&1 | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-aircrack-ng)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-aircrack-ng-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Package aircrack-ng
+        run: |
+          SHORT_COMMIT=$(echo "${{ env.AIRCRACK_NG_COMMIT }}" | cut -c1-8)
+          STAGE="aircrack-ng-${{ env.DEVICE }}-${SHORT_COMMIT}"
+          mkdir -p "${STAGE}"
+
+          for pkgdir in build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/aircrack-ng-* \
+                        build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/pciutils-*; do
+            [ -d "${pkgdir}" ] || continue
+            echo "Packaging: ${pkgdir}"
+            cp -a "${pkgdir}/." "${STAGE}/"
+          done
+          rm -f "${STAGE}/.rocknix-package"
+          rm -rf "${STAGE}/usr/include"
+          find "${STAGE}" -name "*.la" -delete
+
+          if [ ! -x "${STAGE}/usr/bin/aircrack-ng" ]; then
+            echo "ERROR: aircrack-ng binary missing from package"
+            exit 1
+          fi
+
+          if [ ! -x "${STAGE}/usr/bin/lspci" ]; then
+            echo "ERROR: lspci binary missing from package"
+            exit 1
+          fi
+
+          for bad in etc/ld.so.cache usr/bin/systemctl usr/sbin/init usr/lib/ld-linux-aarch64.so.1; do
+            if [ -e "${STAGE}/${bad}" ]; then
+              echo "ERROR: base-system file leaked into package: ${bad}"
+              exit 1
+            fi
+          done
+
+          STRIP="build.ROCKNIX-${{ env.DEVICE }}.aarch64/toolchain/bin/aarch64-rocknix-linux-gnu-strip"
+          if [ -x "${STRIP}" ]; then
+            find "${STAGE}" -type f | while read -r f; do
+              if [ "$(head -c4 "${f}" | tr -d '\0')" = $'\x7fELF' ]; then
+                "${STRIP}" --strip-unneeded "${f}" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          tar -czf "${STAGE}.tar.gz" -C "${STAGE}" .
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload aircrack-ng to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="aircrack-ng-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --title "aircrack-ng for ${{ env.DEVICE }}" --notes "Cross-compiled aircrack-ng suite for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber
