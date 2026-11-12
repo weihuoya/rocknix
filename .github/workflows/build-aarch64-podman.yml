@@ -115,20 +115,24 @@ jobs:
           merge conmon fuse-overlayfs passt catatonit shadow attr-bin inotify-tools fuse3
 
           # Go/Rust binaries are not installed by their package.mk; locate them
-          find_bin() { find "${BUILD_DIR}" -type f -path "*$1*" -name "$2" | head -1; }
+          find_bin() { find "${BUILD_DIR}" -type f -name "$2" | head -1; }
 
-          PODMAN=$(find_bin podman-bin- podman)
-          PODMAN_REMOTE=$(find_bin podman-bin- podman-remote)
-          RUNC=$(find_bin runc- runc)
-          NETAVARK=$(find_bin netavark- netavark)
+          PODMAN=$(find_bin - podman)
+          PODMAN_REMOTE=$(find_bin - podman-remote)
+          RUNC=$(find_bin - runc)
+          NETAVARK=$(find_bin - netavark)
           for pair in "podman:${PODMAN}:usr/bin" "podman-remote:${PODMAN_REMOTE}:usr/bin" \
                       "runc:${RUNC}:usr/libexec/podman" "netavark:${NETAVARK}:usr/libexec/podman"; do
             name=${pair%%:*}; rest=${pair#*:}; src=${rest%:*}; dst=${rest##*:}
-            [ -n "${src}" ] && [ -f "${src}" ] || { echo "ERROR: ${name} binary not found"; exit 1; }
+            [ -n "${src}" ] && [ -f "${src}" ] || {
+              echo "ERROR: ${name} binary not found"
+              ls -d "${BUILD_DIR}"/build/* 2>/dev/null | head -40
+              exit 1
+            }
             cp -a "${src}" "${STAGE}/${dst}/"
           done
           for helper in rootlessport quadlet; do
-            src=$(find_bin podman-bin- "${helper}")
+            src=$(find_bin - "${helper}")
             [ -n "${src}" ] && cp -a "${src}" "${STAGE}/usr/libexec/podman/"
           done
           if [ -f "${STAGE}/usr/bin/conmon" ]; then
