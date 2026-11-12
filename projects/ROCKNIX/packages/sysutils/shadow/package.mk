@@ -23,12 +23,13 @@ PKG_CONFIGURE_OPTS_TARGET="--without-libpam \
 # Only the uid-mapping helpers are needed; readpassphrase is only used by the
 # user management tools we do not build.
 make_target() {
-  ${MAKE} -C ${PKG_BUILD}/src
+  ${MAKE} -C ${PKG_BUILD}/.${TARGET_NAME}
 }
 
 makeinstall_target() {
   mkdir -p ${INSTALL}/usr/bin
-  cp ${PKG_BUILD}/src/newuidmap ${PKG_BUILD}/src/newgidmap ${INSTALL}/usr/bin/
+  cp ${PKG_BUILD}/.${TARGET_NAME}/src/newuidmap \
+     ${PKG_BUILD}/.${TARGET_NAME}/src/newgidmap ${INSTALL}/usr/bin/
 }
 
 post_makeinstall_target() {
