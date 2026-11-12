@@ -112,7 +112,8 @@ jobs:
             done
           }
 
-          merge conmon fuse-overlayfs passt catatonit shadow attr-bin inotify-tools fuse3
+          merge conmon fuse-overlayfs passt catatonit shadow attr-bin inotify-tools fuse3 \
+                gpgme libassuan libgpg-error libseccomp
 
           # Go/Rust binaries are not installed by their package.mk; locate them
           find_bin() { find "${BUILD_DIR}" -type f -name "$2" | head -1; }

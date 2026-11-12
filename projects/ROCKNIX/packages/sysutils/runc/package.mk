@@ -17,7 +17,9 @@ export PKG_GIT_COMMIT="29dd3dc2b13b4123162e5fe132504bb4b15569f1"
 pre_make_target() {
   go_configure
 
-  export LDFLAGS="-w -extldflags -static -X main.gitCommit=${PKG_GIT_COMMIT} -X main.version=$(cat ./VERSION) -extld ${CC}"
+  # ROCKNIX toolchain rewrites -latomic to -latomic_asneeded, which breaks static
+  # linking; runc is fine as a dynamically linked binary (libseccomp is in the image).
+  export LDFLAGS="-w -X main.gitCommit=${PKG_GIT_COMMIT} -X main.version=$(cat ./VERSION) -extld ${CC}"
 
   mkdir -p ${GOPATH}
   if [ -d ${PKG_BUILD}/vendor ]; then
@@ -29,5 +31,5 @@ pre_make_target() {
 
 make_target() {
   mkdir -p bin
-  ${GOLANG} build -v -o bin/runc -a -tags "cgo seccomp static_build" -ldflags "${LDFLAGS}" ./
+  ${GOLANG} build -v -o bin/runc -a -tags "cgo seccomp" -ldflags "${LDFLAGS}" ./
 }
