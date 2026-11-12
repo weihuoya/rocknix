@@ -116,9 +116,12 @@ jobs:
           mkdir -p "${STAGE}"/{usr/bin,usr/libexec/podman,etc/containers}
 
           merge() {
-            for d in "${BUILD_DIR}"/install_pkg/"$1"-*; do
-              [ -d "$d" ] || continue
-              cp -a "$d/." "${STAGE}/"
+            local name
+            for name in "$@"; do
+              for d in "${BUILD_DIR}"/install_pkg/"${name}"-*; do
+                [ -d "$d" ] || continue
+                cp -a "$d/." "${STAGE}/"
+              done
             done
           }
 
