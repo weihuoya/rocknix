@@ -114,15 +114,23 @@ jobs:
 
           merge conmon fuse-overlayfs passt catatonit shadow attr-bin inotify-tools fuse3
 
-          # Go binaries are not installed by their package.mk
-          cp -a "${BUILD_DIR}"/build/podman-bin-*/bin/podman "${STAGE}/usr/bin/"
-          cp -a "${BUILD_DIR}"/build/podman-bin-*/bin/podman-remote "${STAGE}/usr/bin/"
-          cp -a "${BUILD_DIR}"/build/runc-*/bin/runc "${STAGE}/usr/libexec/podman/"
-          if compgen -G "${BUILD_DIR}/install_pkg/netavark-*/netavark" > /dev/null; then
-            cp -a "${BUILD_DIR}"/install_pkg/netavark-*/netavark "${STAGE}/usr/libexec/podman/"
-          else
-            cp -a "${BUILD_DIR}"/build/netavark-*/netavark "${STAGE}/usr/libexec/podman/"
-          fi
+          # Go/Rust binaries are not installed by their package.mk; locate them
+          find_bin() { find "${BUILD_DIR}" -type f -path "*$1*" -name "$2" | head -1; }
+
+          PODMAN=$(find_bin podman-bin- bin/podman)
+          PODMAN_REMOTE=$(find_bin podman-bin- bin/podman-remote)
+          RUNC=$(find_bin runc- bin/runc)
+          NETAVARK=$(find_bin netavark- netavark)
+          for pair in "podman:${PODMAN}:usr/bin" "podman-remote:${PODMAN_REMOTE}:usr/bin" \
+                      "runc:${RUNC}:usr/libexec/podman" "netavark:${NETAVARK}:usr/libexec/podman"; do
+            name=${pair%%:*}; rest=${pair#*:}; src=${rest%:*}; dst=${rest##*:}
+            [ -n "${src}" ] && [ -f "${src}" ] || { echo "ERROR: ${name} binary not found"; exit 1; }
+            cp -a "${src}" "${STAGE}/${dst}/"
+          done
+          for helper in rootlessport quadlet; do
+            src=$(find_bin podman-bin- "bin/${helper}")
+            [ -n "${src}" ] && cp -a "${src}" "${STAGE}/usr/libexec/podman/"
+          done
           if [ -f "${STAGE}/usr/bin/conmon" ]; then
             mv "${STAGE}/usr/bin/conmon" "${STAGE}/usr/libexec/podman/"
           fi
