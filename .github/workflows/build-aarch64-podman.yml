@@ -62,7 +62,7 @@ jobs:
           { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -w /work/rocknix -e PWD=/work/rocknix \
               -e HOME=/work/rocknix/.ci-home -e GOCACHE=/work/rocknix/.ci-gocache \
               "ghcr.io/rocknix/rocknix-build:latest" \
-            bash -c "./scripts/build podman-bin:target conmon:target runc:target netavark:target fuse-overlayfs:target passt:target catatonit:target shadow:target attr-bin:target inotify-tools:target fuse3:target"; echo $? > docker_exit_code; } 2>&1 | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+            bash -c "./scripts/build podman-bin:target && ./scripts/build conmon:target && ./scripts/build runc:target && ./scripts/build netavark:target && ./scripts/build fuse-overlayfs:target && ./scripts/build passt:target && ./scripts/build catatonit:target && ./scripts/build shadow:target && ./scripts/build attr-bin:target && ./scripts/build inotify-tools:target && ./scripts/build fuse3:target"; echo $? > docker_exit_code; } 2>&1 | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
           kill $HEARTBEAT_PID 2>/dev/null || true
           exit_code=$(<docker_exit_code)
           exit $exit_code
