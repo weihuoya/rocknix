@@ -11,4 +11,3 @@ PKG_DEPENDS_TARGET="toolchain fuse3"
 PKG_LONGDESC="FUSE implementation of overlayfs, used as rootless storage driver."
 PKG_TOOLCHAIN="autotools"
 
-PKG_CONFIGURE_OPTS_TARGET="--disable-selinux"
