@@ -16,6 +16,8 @@ jobs:
       DEVICE: SM8550
       ARCH: aarch64
       DISABLE_COLORS: yes
+      # Prebuilt rust toolchain (avoids rebuilding rust from source)
+      RUST_ASSET: rust-aarch64-SM8550-1.99.0.tar.zst
       CCACHE_COMPILERCHECK: content
       CCACHE_COMPRESS: 1
       CCACHE_COMPRESSLEVEL: 6
@@ -42,6 +44,14 @@ jobs:
           curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
           cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
           rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract fixed rust
+        run: |
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/rust-aarch64-${{ env.DEVICE }}"
+          ASSET="${{ env.RUST_ASSET }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
           tar --zstd -xf "${ASSET}"
           rm -f "${ASSET}"
 
