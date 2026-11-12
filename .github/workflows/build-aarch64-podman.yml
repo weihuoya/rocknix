@@ -117,9 +117,9 @@ jobs:
           # Go/Rust binaries are not installed by their package.mk; locate them
           find_bin() { find "${BUILD_DIR}" -type f -path "*$1*" -name "$2" | head -1; }
 
-          PODMAN=$(find_bin podman-bin- bin/podman)
-          PODMAN_REMOTE=$(find_bin podman-bin- bin/podman-remote)
-          RUNC=$(find_bin runc- bin/runc)
+          PODMAN=$(find_bin podman-bin- podman)
+          PODMAN_REMOTE=$(find_bin podman-bin- podman-remote)
+          RUNC=$(find_bin runc- runc)
           NETAVARK=$(find_bin netavark- netavark)
           for pair in "podman:${PODMAN}:usr/bin" "podman-remote:${PODMAN_REMOTE}:usr/bin" \
                       "runc:${RUNC}:usr/libexec/podman" "netavark:${NETAVARK}:usr/libexec/podman"; do
@@ -128,7 +128,7 @@ jobs:
             cp -a "${src}" "${STAGE}/${dst}/"
           done
           for helper in rootlessport quadlet; do
-            src=$(find_bin podman-bin- "bin/${helper}")
+            src=$(find_bin podman-bin- "${helper}")
             [ -n "${src}" ] && cp -a "${src}" "${STAGE}/usr/libexec/podman/"
           done
           if [ -f "${STAGE}/usr/bin/conmon" ]; then
