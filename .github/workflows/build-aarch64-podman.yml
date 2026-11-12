@@ -163,7 +163,7 @@ jobs:
           CONF
           cat > "${STAGE}/etc/containers/containers.conf" <<'CONF'
           [engine]
-          runtime = "runc"
+          runtime = "/usr/libexec/podman/runc"
           conmon_path = ["/usr/libexec/podman/conmon"]
           helper_binaries_dir = ["/usr/libexec/podman"]
 
