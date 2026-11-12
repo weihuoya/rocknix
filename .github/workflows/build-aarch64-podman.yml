@@ -184,8 +184,6 @@ jobs:
                    etc/containers/storage.conf; do
             [ -e "${STAGE}/${f}" ] || { echo "ERROR: ${f} missing"; exit 1; }
           done
-          compgen -G "${STAGE}/usr/lib/libsubid.so*" > /dev/null || { echo "ERROR: libsubid missing"; exit 1; }
-
           # newuidmap/newgidmap must be setuid root in the image
           chmod 4755 "${STAGE}/usr/bin/newuidmap" "${STAGE}/usr/bin/newgidmap"
 

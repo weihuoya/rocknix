@@ -23,14 +23,12 @@ PKG_CONFIGURE_OPTS_TARGET="--without-libpam \
 # Only the uid-mapping helpers are needed; readpassphrase is only used by the
 # user management tools we do not build.
 make_target() {
-  ${MAKE} -C ${PKG_BUILD}/lib libsubid.la
   ${MAKE} -C ${PKG_BUILD}/src newuidmap newgidmap
 }
 
 makeinstall_target() {
-  mkdir -p ${INSTALL}/usr/bin ${INSTALL}/usr/lib
+  mkdir -p ${INSTALL}/usr/bin
   cp ${PKG_BUILD}/src/newuidmap ${PKG_BUILD}/src/newgidmap ${INSTALL}/usr/bin/
-  cp -a ${PKG_BUILD}/lib/.libs/libsubid.so* ${INSTALL}/usr/lib/ 2>/dev/null || true
 }
 
 post_makeinstall_target() {
