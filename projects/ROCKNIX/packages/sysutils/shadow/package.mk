@@ -14,14 +14,25 @@ PKG_TOOLCHAIN="autotools"
 PKG_CONFIGURE_OPTS_TARGET="--without-libpam \
                            --without-selinux \
                            --without-audit \
+                           --without-libbsd \
                            --disable-nls \
                            --disable-logind \
                            --disable-man \
                            --enable-subordinate-ids"
 
+# Only the uid-mapping helpers are needed; readpassphrase is only used by the
+# user management tools we do not build.
+make_target() {
+  ${MAKE} -C ${PKG_BUILD}/lib libsubid.la
+  ${MAKE} -C ${PKG_BUILD}/src newuidmap newgidmap
+}
+
+makeinstall_target() {
+  mkdir -p ${INSTALL}/usr/bin ${INSTALL}/usr/lib
+  cp ${PKG_BUILD}/src/newuidmap ${PKG_BUILD}/src/newgidmap ${INSTALL}/usr/bin/
+  cp -a ${PKG_BUILD}/lib/.libs/libsubid.so* ${INSTALL}/usr/lib/ 2>/dev/null || true
+}
+
 post_makeinstall_target() {
-  # Keep only the subordinate-id helpers and their library.
-  find ${INSTALL}/usr/bin -type f ! -name newuidmap ! -name newgidmap -delete 2>/dev/null || true
-  find ${INSTALL}/usr/sbin -type f -delete 2>/dev/null || true
   rm -rf ${INSTALL}/etc ${INSTALL}/usr/share ${INSTALL}/usr/lib/pkgconfig
 }
