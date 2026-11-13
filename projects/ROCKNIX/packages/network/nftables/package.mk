@@ -4,7 +4,9 @@
 . ${ROOT}/packages/network/nftables/package.mk
 
 # hotspot NAT needs the nft CLI; the global package builds libnftables only (--without-cli)
-PKG_CONFIGURE_OPTS_TARGET="--with-cli=readline --with-mini-gmp"
+# --with-json is required by netavark (podman's network backend) to read the ruleset
+PKG_DEPENDS_TARGET="autotools:host gcc:host libnftnl readline jansson"
+PKG_CONFIGURE_OPTS_TARGET="--with-cli=readline --with-mini-gmp --with-json"
 
 pre_configure_target() {
   export LIBS="-lncurses -ltinfo"
