@@ -3,6 +3,11 @@
 
 . ${ROOT}/packages/network/nftables/package.mk
 
+# 1.1.6 + libnftnl 1.3.1 的 JSON 输入路径有 bug（netavark 应用 ruleset 时
+# nft 报 "No such file or directory ... family ip"），升到 1.1.7 配套 libnftnl 1.3.x
+PKG_VERSION="1.1.7"
+PKG_SHA256="a6fbf060d8d4fff001517a2b94f356bb4366bfbf0ba366366f9d27cc38caa58f"
+
 # hotspot NAT needs the nft CLI; the global package builds libnftables only (--without-cli)
 # --with-json is required by netavark (podman's network backend) to read the ruleset
 PKG_DEPENDS_TARGET="autotools:host gcc:host libnftnl readline jansson"
