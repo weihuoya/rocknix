@@ -17,6 +17,7 @@ makeinstall_target() {
   cp ${PKG_BUILD}/.${TARGET_NAME}/src/stdbuf ${INSTALL}/usr/bin/
   cp ${PKG_BUILD}/.${TARGET_NAME}/src/timeout ${INSTALL}/usr/bin/
   cp ${PKG_BUILD}/.${TARGET_NAME}/src/sort ${INSTALL}/usr/bin/
+  cp ${PKG_BUILD}/.${TARGET_NAME}/src/truncate ${INSTALL}/usr/bin/
   mkdir -p ${INSTALL}/usr/lib/coreutils
   cp ${PKG_BUILD}/.${TARGET_NAME}/src/libstdbuf.so ${INSTALL}/usr/lib/coreutils/
 }
