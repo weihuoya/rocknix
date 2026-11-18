@@ -1,0 +1,137 @@
+name: Build wayvnc for SM8550
+
+on:
+  workflow_dispatch:
+    inputs:
+      wayvnc_repo:
+        description: 'wayvnc repository to build'
+        required: true
+        default: 'any1/wayvnc'
+      wayvnc_ref:
+        description: 'wayvnc branch/tag/commit'
+        required: true
+        default: 'v0.10.1'
+
+jobs:
+  build-aarch64-wayvnc:
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+    env:
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: SM8550
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: justinthelaw/maximize-github-runner-space@v0.9.0
+        with:
+          skip-components: docker-engine,gh-cli
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Checkout wayvnc
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.inputs.wayvnc_repo }}
+          ref: ${{ github.event.inputs.wayvnc_ref }}
+          path: wayvnc
+          fetch-depth: 1
+
+      - name: Download and extract fixed aarch64-toolchain
+        run: |
+          ASSET="toolchain-aarch64-SM8550-e389816a1bf7a28f.tar.zst"
+          URL_BASE="https://github.com/weihuoya/rocknix/releases/download/toolchain-aarch64-SM8550"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.aa" -o "${ASSET}.aa"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}.ab" -o "${ASSET}.ab"
+          cat "${ASSET}.aa" "${ASSET}.ab" > "${ASSET}"
+          rm -f "${ASSET}.aa" "${ASSET}.ab"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Download and extract wayvnc-deps
+        run: |
+          ASSET="wayvnc-deps-aarch64-${{ env.DEVICE }}.tar.zst"
+          URL_BASE="https://github.com/${{ github.repository_owner }}/rocknix/releases/download/wayvnc-aarch64-${{ env.DEVICE }}"
+          curl -L --fail --silent --show-error "${URL_BASE}/${ASSET}" -o "${ASSET}"
+          tar --zstd -xf "${ASSET}"
+          rm -f "${ASSET}"
+
+      - name: Build wayvnc
+        run: |
+          ./scripts/get_env > .env
+          echo 'WAYVNC_SOURCE_DIR=/work/wayvnc' >> .env
+          (
+            while true; do
+              sleep 300
+              ELAPSED_MIN=$((SECONDS / 60))
+              ELAPSED_SEC=$((SECONDS % 60))
+              echo "[heartbeat] $(date -Iseconds) | elapsed: ${ELAPSED_MIN}m${ELAPSED_SEC}s"
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          set -e
+          { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:/work/rocknix -v ${PWD}/wayvnc:/work/wayvnc -w /work/rocknix -e PWD=/work/rocknix "ghcr.io/rocknix/rocknix-build:latest" \
+            bash -c "./scripts/build wayvnc:target"; echo $? > docker_exit_code; } | tee output.log | grep -E --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          exit_code=$(<docker_exit_code)
+          exit $exit_code
+
+      - name: Archive output.logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: output.logs (${{ env.DEVICE }}-aarch64-wayvnc)
+          path: |
+            output.log
+            ./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.threads/logs/
+
+      - name: Clean ccache
+        run: |
+          export CCACHE_DIR=./build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          if command -v ccache &> /dev/null; then
+            ccache -s -v
+            ccache -M 4G
+            ccache -c
+            ccache -s -v
+            ccache -z
+          else
+            echo "ccache not found, skipping cleanup"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: build.ROCKNIX-${{ env.DEVICE }}.aarch64/.ccache
+          key: ccache-aarch64-${{ env.DEVICE }}-wayvnc-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Package wayvnc
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          WAYVNC_VERSION="$(cd wayvnc && git describe --tags --always 2>/dev/null || echo ${VERSION})"
+          STAGE="wayvnc-${WAYVNC_VERSION}-rocknix-SM8550"
+          mkdir -p "${STAGE}"
+          for pkgdir in build.ROCKNIX-${{ env.DEVICE }}.aarch64/install_pkg/*; do
+            [ -d "${pkgdir}" ] || continue
+            cp -a "${pkgdir}/." "${STAGE}/"
+          done
+          tar -czf "${STAGE}.tar.gz" -C "${STAGE}" .
+          echo "ASSET=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          WAYVNC_VERSION="$(cd wayvnc && git describe --tags --always 2>/dev/null || echo dev)"
+          RELEASE_TAG="wayvnc-aarch64-${{ env.DEVICE }}"
+          gh release create "${RELEASE_TAG}" --title "wayvnc for ${{ env.DEVICE }}" --notes "Cross-compiled wayvnc and dependencies for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber
