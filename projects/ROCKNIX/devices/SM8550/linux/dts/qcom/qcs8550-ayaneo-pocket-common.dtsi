@@ -29,8 +29,6 @@
 	/delete-property/ memory-region;
 };
 
-/delete-node/ &remoteproc_cdsp;
-
 / {
 	chassis-type = "handset";
 

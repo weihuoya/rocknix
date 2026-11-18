@@ -1,6 +1,11 @@
+Subject: [PATCH] misc: fastrpc: support user dma-buf mmap for downstream adsprpc
+
+---
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index adc6f850e..1a7415597 100644
 --- a/drivers/misc/fastrpc.c
 +++ b/drivers/misc/fastrpc.c
-@@ -192,6 +192,9 @@
+@@ -220,6 +220,9 @@ struct fastrpc_buf_overlap {
  struct fastrpc_buf {
  	struct fastrpc_user *fl;
  	struct dma_buf *dmabuf;
@@ -10,10 +15,10 @@
  	struct device *dev;
  	void *virt;
  	dma_addr_t dma_addr;
-@@ -422,6 +425,15 @@
+@@ -470,6 +473,16 @@ static void fastrpc_buf_free(struct fastrpc_buf *buf)
+ 	if (!buf)
+ 		return;
  
- static void fastrpc_buf_free(struct fastrpc_buf *buf)
- {
 +	if (buf->attach) {
 +		/* 用户态 dma-buf 包装:detach/put 而非 dma_free_coherent */
 +		dma_buf_unmap_attachment_unlocked(buf->attach, buf->sgt,
@@ -23,10 +28,11 @@
 +		kfree(buf);
 +		return;
 +	}
++
  	dma_free_coherent(buf->dev, buf->size, buf->virt,
  			  fastrpc_ipa_to_dma_addr(buf->fl->cctx, buf->dma_addr));
  	kfree(buf);
-@@ -1936,6 +1948,83 @@
+@@ -2058,6 +2071,83 @@ static int fastrpc_req_munmap(struct fastrpc_user *fl, char __user *argp)
  	return err;
  }
  
@@ -110,15 +116,20 @@
  static int fastrpc_req_mmap(struct fastrpc_user *fl, char __user *argp)
  {
  	struct fastrpc_invoke_args args[3] = { [0 ... 2] = { 0 } };
-@@ -1958,14 +2047,24 @@
- 	}
+@@ -2073,18 +2163,28 @@ static int fastrpc_req_mmap(struct fastrpc_user *fl, char __user *argp)
+ 	if (copy_from_user(&req, argp, sizeof(req)))
+ 		return -EFAULT;
  
+-	if (req.flags != ADSP_MMAP_ADD_PAGES) {
+-		dev_err(dev, "flag not supported 0x%x\n", req.flags);
+-
+-		return -EINVAL;
+-	}
+-
  	if (req.vaddrin) {
 -		dev_err(dev, "adding user allocated pages is not supported\n");
 -		return -EINVAL;
 -	}
--
--	if (req.flags == ADSP_MMAP_REMOTE_HEAP_ADDR)
 +		/*
 +		 * vaddrin 非空:用户态已分配缓冲(dma-buf,fd 传入)的映射
 +		 * 请求——下游 adsprpc 支持,libcdsprpc 的 apps_mem/rpcmem
@@ -132,11 +143,14 @@
 +			return -EINVAL;
 +		}
 +		err = fastrpc_buf_wrap_dmabuf(fl, dev, req.fd, req.size, &buf);
-+	} else if (req.flags == ADSP_MMAP_REMOTE_HEAP_ADDR) {
- 		err = fastrpc_remote_heap_alloc(fl, dev, req.size, &buf);
--	else
 +	} else {
- 		err = fastrpc_buf_alloc(fl, dev, req.size, &buf);
++		if (req.flags != ADSP_MMAP_ADD_PAGES) {
++			dev_err(dev, "flag not supported 0x%x\n", req.flags);
+ 
+-	err = fastrpc_buf_alloc(fl, dev, req.size, &buf);
++			return -EINVAL;
++		}
++		err = fastrpc_buf_alloc(fl, dev, req.size, &buf);
 +	}
  
  	if (err) {
