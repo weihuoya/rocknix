@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ShadowBlip/InputPlumber/main/rootfs/usr/share/inputplumber/schema/capability_map_v2.json
+version: 2
+kind: CapabilityMap
+name: AYANEO Pocket S 2K GPIO Keys
+id: ayaneo_pocket_s2k_keys
+
+# The DTS exposes AYA SPACE, =, LC and RC as KEY_A-F16. Remap them by
+# changing the target_event blocks below; no kernel or DTS rebuild is needed.
+mapping:
+  - name: AYA SPACE
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_A
+          value_type: button
+    target_event:
+      gamepad:
+        button: QuickAccess
+
+  - name: Menu (=)
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_EQUAL
+          value_type: button
+    target_event:
+      gamepad:
+        button: LeftPaddle2
+
+  - name: LC
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_LEFT
+          value_type: button
+    target_event:
+      gamepad:
+        button: LeftPaddle1
+
+  - name: RC
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_RIGHT
+          value_type: button
+    target_event:
+      gamepad:
+        button: RightPaddle1
+
+  # Vendor performance-mode button; ROCKNIX has no handler for it yet, so
+  # expose it as a bindable hotkey.
+  - name: Standard
+    source_events:
+      - evdev:
+          event_type: KEY
+          event_code: KEY_YELLOW
+          value_type: button
+    target_event:
+      keyboard: KeyF17
+
+filtered_events: []

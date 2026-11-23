@@ -3,8 +3,8 @@
 # Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="libxkbcommon"
-PKG_VERSION="1.8.0"
-PKG_SHA256="025c53032776ed850fbfb92683a703048cd70256df4ac1a1ec41ed3455d5d39c"
+PKG_VERSION="1.8.1"
+PKG_SHA256="c65c668810db305c4454ba26a10b6d84a96b5469719fe3c729e1c6542b8d0d87"
 PKG_LICENSE="MIT"
 PKG_SITE="https://xkbcommon.org"
 PKG_URL="https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-${PKG_VERSION}.tar.gz"

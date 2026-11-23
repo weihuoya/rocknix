@@ -8,14 +8,85 @@
 /dts-v1/;
 
 #include "qcs8550-ayaneo-pocket-common.dtsi"
+#include "qcs8550-sdhc2-downstream.dtsi"
 
 / {
 	model = "AYANEO Pocket S 2K";
 	compatible = "ayaneo,pocket-s1", "qcom,sm8550";
 	chassis-type = "handset";
+
+	/*
+	 * AYA SPACE, =, LC, RC and Standard are on SoC GPIOs, not the
+	 * controller MCU. Keep this separate from the common gpio-keys node
+	 * so InputPlumber does not grab volume.
+	 */
+	aya-keys {
+		compatible = "gpio-keys";
+		label = "aya-keys";
+
+		pinctrl-0 = <&aya_keys_default>;
+		pinctrl-names = "default";
+
+		key-aya-space {
+			label = "AYA Space";
+			debounce-interval = <15>;
+			gpios = <&tlmm 85 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_A>;
+			wakeup-source;
+		};
+
+		key-menu {
+			label = "Menu";
+			debounce-interval = <15>;
+			gpios = <&tlmm 169 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_EQUAL>;
+			wakeup-source;
+		};
+
+		key-lc {
+			label = "LC";
+			debounce-interval = <15>;
+			gpios = <&tlmm 91 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_LEFT>;
+			wakeup-source;
+		};
+
+		key-rc {
+			label = "RC";
+			debounce-interval = <15>;
+			gpios = <&tlmm 88 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RIGHT>;
+			wakeup-source;
+		};
+
+		key-standard {
+			label = "Standard";
+			debounce-interval = <15>;
+			gpios = <&tlmm 109 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_YELLOW>;
+			wakeup-source;
+		};
+	};
+};
+
+/* Physical + is on the PMIC resin input, - on the PM8550 GPIO. */
+&{/gpio-keys/key-volume-up} {
+	label = "Volume Down";
+	linux,code = <KEY_VOLUMEDOWN>;
+};
+
+&pon_resin {
+	linux,code = <KEY_VOLUMEUP>;
 };
 
 &tlmm {
+	aya_keys_default: aya-keys-default-state {
+		pins = "gpio85", "gpio88", "gpio91", "gpio109", "gpio169";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
 	panel_pwr_active: panel-pwr-active-state {
 		pins = "gpio72", "gpio42", "gpio152", "gpio153";
 		function = "gpio";
@@ -48,7 +119,7 @@
 		pins = "gpio25";
 		function = "gpio";
 		drive-strength = <8>;
-		bias-disable;
+		bias-pull-up;
 		input-enable;
 	};
 
@@ -56,8 +127,8 @@
 		pins = "gpio24";
 		function = "gpio";
 		drive-strength = <8>;
-		input-enable;
-		bias-pull-down;
+		bias-disable;
+		output-high;
 	};
 };
 
@@ -117,7 +188,9 @@
 		interrupt-parent = <&tlmm>;
 		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
 
-		reset-gpios = <&tlmm 24 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&tlmm 25 GPIO_ACTIVE_HIGH>;
+		/* goodix.c drives reset as logical 0=assert/1=release; keep logical == physical */
+		reset-gpios = <&tlmm 24 GPIO_ACTIVE_HIGH>;
 		VDDIO-supply = <&vreg_l14b_3p2>;
 		AVDD28-supply = <&vreg_l14b_3p2>;
 
