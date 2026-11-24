@@ -5,7 +5,7 @@ Subject: [PATCH] Bluetooth: btrtl: Add the support for RTL8733BU
 
 ---
  drivers/bluetooth/btrtl.c | 11 +++++++++++
- drivers/bluetooth/btusb.c |  3 +++
+ drivers/bluetooth/btusb_main.c |  3 +++
  2 files changed, 14 insertions(+)
 
 diff --git a/drivers/bluetooth/btrtl.c b/drivers/bluetooth/btrtl.c
@@ -44,10 +44,10 @@ index 0bcb44cf7b31..5e68d19454e5 100644
  MODULE_FIRMWARE("rtl_bt/rtl8761a_fw.bin");
  MODULE_FIRMWARE("rtl_bt/rtl8761a_config.bin");
  MODULE_FIRMWARE("rtl_bt/rtl8761b_fw.bin");
-diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
-index e9534fbc92e3..e750e3011639 100644
---- a/drivers/bluetooth/btusb.c
-+++ b/drivers/bluetooth/btusb.c
+diff --git a/drivers/bluetooth/btusb_main.c b/drivers/bluetooth/btusb_main.c
+index 67b7271c9eb9..821aa07ab642 100644
+--- a/drivers/bluetooth/btusb_main.c
++++ b/drivers/bluetooth/btusb_main.c
 @@ -665,6 +665,9 @@ static const struct usb_device_id quirks_table[] = {
  	{ USB_DEVICE(0x0bda, 0xb009), .driver_info = BTUSB_REALTEK },
  	{ USB_DEVICE(0x2ff8, 0xb011), .driver_info = BTUSB_REALTEK },

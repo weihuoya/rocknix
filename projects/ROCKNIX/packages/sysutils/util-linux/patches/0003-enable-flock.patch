@@ -1,0 +1,20 @@
+Subject: [PATCH] build: make flock configurable
+
+Give flock an AC_ARG_ENABLE so it can be selected with --disable-all-programs.
+
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -2083,7 +2083,11 @@
+ AM_CONDITIONAL([BUILD_PIVOT_ROOT], [test "x$build_pivot_root" = xyes])
+ 
+ 
++AC_ARG_ENABLE([flock],
++  AS_HELP_STRING([--disable-flock], [do not build flock]),
++  [], [UL_DEFAULT_ENABLE([flock], [check])]
++)
+-UL_BUILD_INIT([flock], [check])
++UL_BUILD_INIT([flock])
+ UL_REQUIRES_HAVE([flock], [timer], [timer_create/setitimer function])
+ AM_CONDITIONAL([BUILD_FLOCK], [test "x$build_flock" = xyes])
+ 
