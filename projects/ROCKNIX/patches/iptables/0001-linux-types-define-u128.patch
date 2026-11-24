@@ -1,0 +1,21 @@
+From: zhangwei <zwdreams@gmail.com>
+Subject: linux/types.h: define __u128
+
+Linux 7.3 arm64 UAPI <asm/sigcontext.h> uses __u128. iptables ships an
+old copy of <linux/types.h> that shadows the kernel one, so pulling in
+<signal.h> fails with "unknown type name '__u128'".
+
+--- a/include/linux/types.h
++++ b/include/linux/types.h
+@@ -3,6 +3,11 @@
+ 
+ #include <asm/types.h>
+ 
++#ifdef __SIZEOF_INT128__
++typedef __signed__ __int128 __s128 __attribute__((aligned(16)));
++typedef unsigned __int128 __u128 __attribute__((aligned(16)));
++#endif
++
+ #ifndef __ASSEMBLY__
+ 
+ #include <linux/posix_types.h>

@@ -135,13 +135,7 @@ jobs:
 
           # DTBs
           mkdir -p kernel-artifacts/dtbs
-          if [ -d "${LINUX_INSTALL}/usr/share/bootloader/boot" ]; then
-            cp -v "${LINUX_INSTALL}/usr/share/bootloader/boot"/*.dtb kernel-artifacts/dtbs/ 2>/dev/null || true
-          fi
-          cp -v "${LINUX_INSTALL}/usr/share/bootloader"/*.dtb kernel-artifacts/dtbs/ 2>/dev/null || true
-          if [ -d "${LINUX_INSTALL}/usr/share/bootloader/overlays" ]; then
-            cp -a "${LINUX_INSTALL}/usr/share/bootloader/overlays" kernel-artifacts/dtbs/ 2>/dev/null || true
-          fi
+          cp -v "${LINUX_INSTALL}/usr/share/bootloader/dtbs"/*.dtb kernel-artifacts/dtbs/
 
           # Modules
           MOD_BASE="${LINUX_INSTALL}/usr/lib/kernel-overlays/base/lib/modules"
@@ -178,5 +172,5 @@ jobs:
         run: |
           set -e
           RELEASE_TAG="kernel-SM8550"
-          gh release create "${RELEASE_TAG}" --title "kernel for SM8550" --notes "Cross-compiled kernel ${KERNEL_VERSION} for ROCKNIX SM8550." --prerelease || true
+          gh release create "${RELEASE_TAG}" --title "kernel for SM8550" --notes "Cross-compiled kernel for ROCKNIX SM8550." --prerelease || true
           gh release upload "${RELEASE_TAG}" "${{ env.ASSET }}" --clobber

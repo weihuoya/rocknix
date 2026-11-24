@@ -200,5 +200,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RELEASE_TAG="podman-stack-aarch64-${{ env.DEVICE }}"
-          gh release create "${RELEASE_TAG}" --title "podman stack for ${{ env.DEVICE }}" --notes "Rootless podman stack (podman 6.2.0, conmon, runc, netavark, fuse-overlayfs, pasta, catatonit, newuidmap/newgidmap, setfattr, inotifywait) for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
+          gh release create "${RELEASE_TAG}" --title "podman stack for ${{ env.DEVICE }}" --notes "Rootless podman stack (podman, conmon, runc, netavark, fuse-overlayfs, pasta, catatonit, newuidmap/newgidmap, setfattr, inotifywait) for ROCKNIX ${{ env.DEVICE }}." --prerelease || true
           gh release upload "${RELEASE_TAG}" "${ASSET}" "${ASSET}.sha256" --clobber

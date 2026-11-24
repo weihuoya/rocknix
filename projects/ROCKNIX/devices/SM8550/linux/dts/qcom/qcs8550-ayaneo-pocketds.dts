@@ -20,6 +20,9 @@
 	gpio-keys-lid {
 		compatible = "gpio-keys";
 
+		pinctrl-0 = <&hall_lid_n>;
+		pinctrl-names = "default";
+
 		hall-lid-sensor {
 			label = "Hall Lid Sensor";
 			gpios = <&tlmm 166 GPIO_ACTIVE_LOW>;
@@ -133,7 +136,7 @@
 		pins = "gpio39";
 		function = "gpio";
 		drive-strength = <8>;
-		bias-disable;
+		bias-pull-up;
 		input-enable;
 	};
 
@@ -141,8 +144,15 @@
 		pins = "gpio38";
 		function = "gpio";
 		drive-strength = <8>;
-		input-enable;
-		bias-pull-down;
+		bias-disable;
+		output-high;
+	};
+
+	hall_lid_n: hall-lid-n-state {
+		pins = "gpio166";
+		function = "gpio";
+		bias-pull-up;
+		output-disable;
 	};
 };
 
@@ -209,6 +219,7 @@
 		reset-gpios = <&tlmm 38 GPIO_ACTIVE_HIGH>;
 		irq-gpios = <&tlmm 39 GPIO_ACTIVE_HIGH>;
 		VDDIO-supply = <&vdd_ts>;
+		AVDD28-supply = <&vdd_ts>;
 
 		touchscreen-size-x = <768>;
 		touchscreen-size-y = <1024>;

@@ -59,6 +59,15 @@
 			wakeup-source;
 		};
 
+		/* The 2K wires RC to GPIO170; keep GPIO88 as the stock DT's alternate and report both as KEY_RIGHT. */
+		key-rc2 {
+			label = "RC";
+			debounce-interval = <15>;
+			gpios = <&tlmm 170 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RIGHT>;
+			wakeup-source;
+		};
+
 		key-standard {
 			label = "Standard";
 			debounce-interval = <15>;
@@ -81,7 +90,7 @@
 
 &tlmm {
 	aya_keys_default: aya-keys-default-state {
-		pins = "gpio85", "gpio88", "gpio91", "gpio109", "gpio169";
+		pins = "gpio85", "gpio88", "gpio91", "gpio109", "gpio169", "gpio170";
 		function = "gpio";
 		drive-strength = <2>;
 		bias-pull-up;
@@ -169,6 +178,7 @@
 	backlight: sy7758@2e {
 		compatible = "silergy,sy7758";
 		reg = <0x2e>;
+		enable-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
 		pinctrl-0 = <&backlight_pwr_active>;
 		pinctrl-1 = <&backlight_pwr_sleep>;
 		pinctrl-names = "default", "sleep";
